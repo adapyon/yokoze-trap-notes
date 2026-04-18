@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>横瀬町 罠猟ノート</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;margin:0}
+body{font-family:'Zen Maru Gothic','Hiragino Sans','YuGothic',sans-serif;background:#F4EDD8;color:#0D2614;-webkit-font-smoothing:antialiased}
+#root{height:100%;display:flex;flex-direction:column}
+
+:root{
+  --forest-900:#0D2614;--forest-800:#163D22;--forest-700:#1E5430;--forest-600:#2B7043;
+  --forest-500:#3A8F56;--forest-400:#52AE72;--forest-300:#78C994;--forest-200:#B0E4C0;
+  --forest-100:#DDF4E5;--forest-50:#F0FAF4;
+  --amber-500:#D4780A;--amber-400:#E8911E;--amber-100:#FEF3C7;
+  --parchment:#F4EDD8;
+  --radius-card:1.25rem;--radius-btn:0.875rem;--radius-input:0.875rem;
+  --shadow-card:0 2px 12px rgba(30,80,40,0.08),0 1px 3px rgba(0,0,0,0.06);
+  --shadow-fab:0 6px 24px rgba(22,61,34,0.40);
+}
+
+/* Leaflet */
+.leaflet-container{background:#d5cfbf;font-family:inherit}
+.leaflet-popup-content-wrapper{border-radius:1rem;box-shadow:0 8px 32px rgba(0,0,0,0.18);border:1.5px solid var(--forest-200);padding:0}
+.leaflet-popup-content{margin:12px 14px 10px;font-family:inherit}
+.leaflet-popup-tip{background:#fff}
+.leaflet-control-zoom{border:none!important}
+.leaflet-control-zoom a{border-radius:.75rem!important;background:white!important;color:var(--forest-700)!important;border:1.5px solid var(--forest-200)!important;font-weight:800!important;font-size:1.1rem!important;margin-bottom:4px!important;box-shadow:var(--shadow-card)!important;width:36px!important;height:36px!important;line-height:34px!important}
+
+/* Bottom Sheet */
+.sheet-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.42);backdrop-filter:blur(4px);display:flex;flex-direction:column;justify-content:flex-end;animation:overlay-in .18s ease}
+@keyframes overlay-in{from{opacity:0}to{opacity:1}}
+.sheet-panel{background:white;border-radius:1.75rem 1.75rem 0 0;padding-bottom:max(1.5rem,env(safe-area-inset-bottom));max-height:94vh;overflow-y:auto;animation:sheet-in .24s cubic-bezier(0.32,0.72,0,1)}
+@keyframes sheet-in{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
+.sheet-grip{width:2.75rem;height:5px;background:var(--forest-200);border-radius:9999px;margin:.875rem auto 0}
+.sheet-body{padding:.875rem 1.375rem .5rem}
+
+@media(min-width:768px){
+  .sheet-overlay{align-items:center;justify-content:center;padding:1.25rem}
+  .sheet-panel{border-radius:1.5rem;max-width:32rem;width:100%;animation:none;max-height:90vh}
+  .sheet-grip{display:none}
+  .sheet-body{padding:1.75rem}
+}
+
+/* FAB */
+.fab{position:fixed;right:1.25rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));z-index:200;width:3.75rem;height:3.75rem;border-radius:1.375rem;background:linear-gradient(145deg,var(--forest-500),var(--forest-800));color:white;border:none;box-shadow:var(--shadow-fab);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .14s,box-shadow .14s}
+.fab:active{transform:scale(0.88)}
+
+/* Bottom Nav */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:200;height:calc(4.5rem + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:white;border-top:1.5px solid var(--forest-100);display:flex;box-shadow:0 -4px 24px rgba(30,80,40,0.07)}
+.nav-btn{flex:1;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:.5rem;color:#a8bca8;font-family:inherit;font-size:.6rem;font-weight:700;letter-spacing:.04em;transition:color .15s}
+.nav-btn.active{color:var(--forest-600)}
+
+/* Fields */
+.field-input{display:block;width:100%;border:2px solid var(--forest-200);border-radius:var(--radius-input);padding:0 1rem;height:3rem;font-family:inherit;font-size:.9rem;font-weight:500;color:var(--forest-900);background:white;outline:none;transition:border-color .15s}
+.field-input:focus{border-color:var(--forest-500)}
+textarea.field-input{height:auto;padding:.75rem 1rem;resize:none;line-height:1.7}
+
+/* Pick mode */
+.pick-mode .leaflet-container{cursor:crosshair!important}
+.pick-banner{position:absolute;top:.875rem;left:50%;transform:translateX(-50%);z-index:500;background:rgba(14,38,20,0.88);color:white;backdrop-filter:blur(8px);padding:.625rem 1.375rem;border-radius:9999px;font-size:.8rem;font-weight:700;letter-spacing:.03em;white-space:nowrap;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
+
+/* Toast */
+.toast{position:fixed;bottom:calc(5.5rem + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:300;background:var(--forest-800);color:white;padding:.75rem 1.5rem;border-radius:1rem;font-size:.82rem;font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,0.3);white-space:nowrap;animation:overlay-in .2s}
+
+/* Status badge */
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:800;border:1.5px solid;font-family:inherit}
+
+/* Detail view */
+.detail-view{position:absolute;inset:0;z-index:100;background:var(--parchment);animation:slide-in .22s cubic-bezier(0.32,0.72,0,1);overflow-y:auto}
+@keyframes slide-in{from{transform:translateX(100%)}to{transform:translateX(0)}}
+
+/* Offline bar */
+.offline-bar{background:linear-gradient(90deg,#d97706,#b45309);color:white;text-align:center;font-size:.72rem;font-weight:800;padding:.3rem .5rem;letter-spacing:.04em;flex-shrink:0}
+
+/* Sighting item */
+.sighting-item{display:flex;gap:12px;align-items:flex-start;padding:.875rem 0;border-bottom:1px solid var(--forest-100)}
+.sighting-item:last-child{border-bottom:none}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--forest-200);border-radius:9999px}
+
+/* Responsive helpers */
+@media(min-width:768px){.mobile-only{display:none!important}.desktop-sidebar{display:flex!important}.desktop-addbtn{display:flex!important}}
+@media(max-width:767px){.desktop-sidebar{display:none!important}.desktop-addbtn{display:none!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const {useState, useEffect, useRef, useCallback} = React;
+
+const SK = 'yokose-v4';
+const TILE_CACHE = 'gsi-v2';
+const CENTER = [35.9722871, 139.165769];
+const ZOOM0 = 14;
+
+const TRAP_TYPES = {
+  kukuri: {emoji:'🪤', label:'くくり罠', color:'#1B5E3B'},
+  hako:   {emoji:'📦', label:'はこ罠',   color:'#7B4E28'},
+  other:  {emoji:'❓', label:'その他',   color:'#6B7280'},
+};
+
+const TRAP_STATUS = {
+  '稼働中':  {bg:'#D1FAE5', text:'#065F46', border:'#6EE7B7'},
+  '要確認':  {bg:'#FEF3C7', text:'#92400E', border:'#FCD34D'},
+  '撤去済み':{bg:'#F1F5F9', text:'#475569', border:'#CBD5E1'},
+};
+
+const STATUS_ICON = {'稼働中':'🟢','要確認':'🟡','撤去済み':'⚫'};
+
+const ANIMALS = [
+  {id:'shika',    emoji:'🦌', label:'シカ'},
+  {id:'tanuki',   emoji:'🦝', label:'タヌキ'},
+  {id:'araiguma', emoji:'🦝', label:'アライグマ'},
+  {id:'anaguma',  emoji:'🦡', label:'アナグマ'},
+  {id:'other',    emoji:'🐾', label:'その他'},
+];
+const AMAP = Object.fromEntries(ANIMALS.map(a => [a.id, a]));
+
+const loadTraps = () => { try { return JSON.parse(localStorage.getItem(SK) || '[]'); } catch { return []; } };
+
+const nextTrapId = (traps) => {
+  const nums = traps.map(t => { const m = t.trapId.match(/^A-(\d+)$/); return m ? +m[1] : 0; });
+  return 'A-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3,'0');
+};
+
+const fmtDate = (s) => {
+  if (!s) return '—';
+  const d = new Date(s + 'T00:00:00');
+  return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+};
+
+const fmtDT = (s) => {
+  if (!s) return '—';
+  return new Date(s).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+};
+
+const OFFLINE_SVG = 'data:image/svg+xml,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">' +
+  '<rect fill="#d5cfbf" width="256" height="256"/>' +
+  '<text x="128" y="105" text-anchor="middle" font-size="30">🌲</text>' +
+  '<text x="128" y="145" text-anchor="middle" fill="#9A9080" font-size="12" font-family="sans-serif">オフライン</text>' +
+  '</svg>'
+);
+
+const OfflineTiles = L.TileLayer.extend({
+  createTile(coords, done) {
+    const img = document.createElement('img');
+    img.alt = '';
+    const url = this.getTileUrl(coords);
+    (async () => {
+      if ('caches' in window) {
+        try {
+          const c = await caches.open(TILE_CACHE);
+          const hit = await c.match(url);
+          if (hit) { img.src = URL.createObjectURL(await hit.blob()); done(null, img); return; }
+        } catch {}
+      }
+      try {
+        const res = await fetch(url, {mode:'cors'});
+        if (res.ok) {
+          const clone = res.clone();
+          img.src = URL.createObjectURL(await res.blob());
+          done(null, img);
+          if ('caches' in window) caches.open(TILE_CACHE).then(c => c.put(url, clone)).catch(() => {});
+          return;
+        }
+      } catch {}
+      img.src = OFFLINE_SVG;
+      done(null, img);
+    })();
+    return img;
+  }
+});
+
+const ll2tile = (lat, lng, z) => {
+  const n = Math.pow(2, z), lr = lat * Math.PI / 180;
+  return {x: Math.floor((lng + 180) / 360 * n), y: Math.floor((1 - Math.log(Math.tan(lr) + 1/Math.cos(lr)) / Math.PI) / 2 * n)};
+};
+
+const cacheViewport = async (bounds, zoom) => {
+  if (!('caches' in window)) return -1;
+  const urls = [];
+  for (let z = Math.max(10, zoom-1); z <= Math.min(17, zoom+2); z++) {
+    const nw = ll2tile(bounds.getNorth(), bounds.getWest(), z);
+    const se = ll2tile(bounds.getSouth(), bounds.getEast(), z);
+    for (let x = nw.x; x <= se.x; x++)
+      for (let y = nw.y; y <= se.y; y++)
+        urls.push('https://cyberjapandata.gsi.go.jp/xyz/std/' + z + '/' + x + '/' + y + '.png');
+  }
+  if (urls.length > 600) return -2;
+  const cache = await caches.open(TILE_CACHE);
+  let saved = 0;
+  for (const u of urls) {
+    try {
+      if (await cache.match(u)) continue;
+      const r = await fetch(u, {mode:'cors'});
+      if (r.ok) { await cache.put(u, r); saved++; }
+    } catch {}
+    await new Promise(r => setTimeout(r, 12));
+  }
+  return saved;
+};
+
+const makePin = (trap, selected) => {
+  const tt = TRAP_TYPES[trap.type];
+  const st = TRAP_STATUS[trap.status];
+  const sz = selected ? 48 : 38;
+  const fs = selected ? 22 : 17;
+  const ring = selected
+    ? 'box-shadow:0 0 0 4px ' + st.border + ',0 4px 14px rgba(0,0,0,0.25)'
+    : 'box-shadow:0 3px 12px rgba(0,0,0,0.22)';
+  return L.divIcon({
+    html: '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:' + st.bg + ';border:3px solid ' + st.border + ';' + ring + ';display:flex;align-items:center;justify-content:center;font-size:' + fs + 'px;line-height:1;transition:all .2s">' + tt.emoji + '</div>',
+    className: '',
+    iconSize: [sz, sz],
+    iconAnchor: [sz/2, sz/2],
+    popupAnchor: [0, -sz/2-6],
+  });
+};
+
+const makePopup = (t) => {
+  const tt = TRAP_TYPES[t.type];
+  const st = TRAP_STATUS[t.status];
+  const lastS = t.sightings.length > 0 ? t.sightings[t.sightings.length-1] : null;
+  const animal = lastS ? (AMAP[lastS.animal] || AMAP.other) : null;
+  return '<div style="font-family:\'Zen Maru Gothic\',\'Hiragino Sans\',sans-serif;font-size:13px;min-width:180px">' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+    '<span style="font-size:24px;line-height:1">' + tt.emoji + '</span>' +
+    '<div><div style="font-weight:900;color:#0D2614;font-size:15px">' + t.trapId + '</div>' +
+    '<div style="font-size:11px;color:#3A8F56;font-weight:700">' + (t.notes || tt.label) + '</div></div></div>' +
+    '<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;background:' + st.bg + ';color:' + st.text + ';border:1.5px solid ' + st.border + ';font-size:11px;font-weight:800;margin-bottom:7px">' + STATUS_ICON[t.status] + ' ' + t.status + '</div>' +
+    '<div style="font-size:11px;color:#6B8C7A;margin-bottom:4px">🗓 設置日 ' + fmtDate(t.installedAt) + '</div>' +
+    (t.sightings.length > 0 ? '<div style="font-size:11px;color:#6B8C7A">📷 目撃 ' + t.sightings.length + '件' + (animal ? '（最新: ' + animal.emoji + animal.label + '）' : '') + '</div>' : '') +
+    '</div>';
+};
+
+const labelSt = {display:'block', fontSize:'0.72rem', fontWeight:800, color:'var(--forest-500)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6};
+
+// ── FilterBar ────────────────────────────────────────────────
+function FilterBar({query, setQuery, filterSt, setFSt, filterTy, setFTy, mobile}) {
+  const h = mobile ? '2.875rem' : '2.125rem';
+  const r = mobile ? '0.875rem' : '0.625rem';
+  const fs = mobile ? '0.875rem' : '0.75rem';
+  const base = {border:'1.5px solid var(--forest-200)', borderRadius:r, fontSize:fs, fontWeight:600, color:'var(--forest-900)', background:'white', outline:'none', fontFamily:'inherit', height:h};
+  return (
+    React.createElement('div', {style:{padding: mobile ? '10px 12px 8px' : '8px 10px', background:'white', borderBottom:'1.5px solid var(--forest-100)', flexShrink:0}},
+      React.createElement('input', {style:{...base, display:'block', width:'100%', padding:'0 0.875rem', marginBottom:8}, placeholder:'🔍 認識番号・メモで検索', value:query, onChange:e => setQuery(e.target.value)}),
+      React.createElement('div', {style:{display:'flex', gap:8}},
+        [{val:filterSt, set:setFSt, opts:[['すべて','状態:全て'],['稼働中','🟢 稼働中'],['要確認','🟡 要確認'],['撤去済み','⚫ 撤去済み']]},
+         {val:filterTy, set:setFTy, opts:[['すべて','種類:全て'],['kukuri','🪤 くくり罠'],['hako','📦 はこ罠'],['other','❓ その他']]}
+        ].map(({val, set, opts}, i) =>
+          React.createElement('select', {key:i, className:'field-input', style:{...base, flex:1, minWidth:0, paddingRight:'2rem', appearance:'none', backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%234A8C65' d='M5 7L1 3h8z'/%3E%3C/svg%3E\")", backgroundRepeat:'no-repeat', backgroundPosition:'right 0.75rem center'}, value:val, onChange:e => set(e.target.value)},
+            opts.map(([v,l]) => React.createElement('option', {key:v, value:v}, l))
+          )
+        )
+      )
+    )
+  );
+}
+
+// ── TrapCard ─────────────────────────────────────────────────
+function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDetail, desktop}) {
+  const tt = TRAP_TYPES[t.type];
+  const st = TRAP_STATUS[t.status];
+  const lastSight = t.sightings[t.sightings.length-1];
+  const lastAnimal = lastSight ? (AMAP[lastSight.animal] || AMAP['other']) : null;
+
+  return (
+    <div style={{background:'white', borderBottom: desktop ? '1px solid var(--forest-100)' : undefined, borderRadius: desktop ? 0 : 'var(--radius-card)', border: desktop ? undefined : '1.5px solid ' + (isSel ? st.border : 'var(--forest-100)'), boxShadow: desktop ? undefined : (isSel ? '0 4px 18px ' + st.border + '60' : 'var(--shadow-card)'), marginBottom: desktop ? 0 : 8, overflow:'hidden', cursor:'pointer', transition:'box-shadow 0.2s', borderLeft: desktop && isSel ? '4px solid ' + st.border : undefined}} onClick={onToggle}>
+      <div style={{display:'flex', alignItems:'center', gap:12, padding:'13px 14px 13px 16px'}}>
+        <div style={{flexShrink:0, width:46, height:46, borderRadius:'13px', background:st.bg, border:'2px solid ' + st.border, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', lineHeight:1}}>
+          {tt.emoji}
+        </div>
+        <div style={{flex:1, minWidth:0}}>
+          <div style={{display:'flex', alignItems:'center', gap:7, flexWrap:'wrap', marginBottom:4}}>
+            <span style={{fontWeight:900, fontSize:'1rem', color:'var(--forest-900)', fontFamily:"'JetBrains Mono', monospace", letterSpacing:'0.05em'}}>{t.trapId}</span>
+            <span className="status-badge" style={{background:st.bg, color:st.text, borderColor:st.border}}>{STATUS_ICON[t.status]} {t.status}</span>
+          </div>
+          <div style={{fontSize:'0.78rem', color:'var(--forest-600)', fontWeight:600, marginBottom:3}}>
+            {tt.label}{t.notes ? ' · ' + t.notes.slice(0,24) : ''}
+          </div>
+          <div style={{fontSize:'0.68rem', color:'var(--forest-400)', display:'flex', gap:10, flexWrap:'wrap', fontWeight:600}}>
+            <span>🗓 {fmtDate(t.installedAt)}</span>
+            {t.sightings.length > 0 && <span>📷 {t.sightings.length}件 {lastAnimal && lastAnimal.emoji + lastAnimal.label}</span>}
+            {t.lat && t.lng && <span style={{fontFamily:'monospace', fontSize:'0.65rem'}}>{parseFloat(t.lat).toFixed(3)},{parseFloat(t.lng).toFixed(3)}</span>}
+          </div>
+        </div>
+        <div style={{display:'flex', flexDirection:'column', gap:4, flexShrink:0}}>
+          <button onClick={e => {e.stopPropagation(); onDetail();}} style={{fontSize:'0.72rem', fontWeight:800, padding:'5px 10px', borderRadius:'0.625rem', background:'var(--forest-50)', color:'var(--forest-600)', border:'1.5px solid var(--forest-200)', cursor:'pointer', fontFamily:'inherit'}}>詳細</button>
+          <button onClick={e => {e.stopPropagation(); onEdit(e);}} style={{fontSize:'0.72rem', fontWeight:800, padding:'5px 10px', borderRadius:'0.625rem', background:'var(--amber-100)', color:'var(--amber-500)', border:'1.5px solid #FCD34D', cursor:'pointer', fontFamily:'inherit'}}>編集</button>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div style={{padding:'0 16px 14px', borderTop:'1px solid var(--forest-50)', background:'#F8FCF6'}}>
+          {t.lat && t.lng ? (
+            <div style={{paddingTop:12}}>
+              <div style={{fontSize:'0.7rem', fontWeight:800, color:'var(--forest-500)', marginBottom:6}}>📍 GPS座標</div>
+              <div style={{fontFamily:"'JetBrains Mono', monospace", fontSize:'0.78rem', background:'white', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', padding:'8px 12px', color:'var(--forest-900)'}}>{t.lat}, {t.lng}</div>
+              <button onClick={e => {e.stopPropagation(); onFly();}} style={{marginTop:6, fontSize:'0.78rem', fontWeight:800, color:'var(--forest-600)', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit'}}>🗺 地図で確認 →</button>
+            </div>
+          ) : <div style={{paddingTop:12, fontSize:'0.78rem', color:'var(--forest-300)', fontWeight:600}}>GPS座標未登録</div>}
+          {t.notes && (
+            <div style={{marginTop:10}}>
+              <div style={{fontSize:'0.7rem', fontWeight:800, color:'var(--forest-500)', marginBottom:5}}>📝 メモ</div>
+              <p style={{fontSize:'0.87rem', color:'var(--forest-800)', lineHeight:1.7, margin:0, whiteSpace:'pre-wrap'}}>{t.notes}</p>
+            </div>
+          )}
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10}}>
+            <span style={{fontSize:'0.68rem', color:'var(--forest-300)', fontWeight:600}}>更新 {fmtDT(t.updatedAt)}</span>
+            <button onClick={e => {e.stopPropagation(); onDel();}} style={{fontSize:'0.78rem', fontWeight:800, color:'#DC2626', background:'#FFF5F5', border:'1px solid #FCA5A5', borderRadius:'0.75rem', padding:'5px 12px', cursor:'pointer', fontFamily:'inherit'}}>🗑 削除</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── TrapList ─────────────────────────────────────────────────
+function TrapList({filtered, traps, openCardId, setOpenCardId, selId, onEdit, onDel, onFly, onDetail, desktop}) {
+  if (!filtered.length) return (
+    <div style={{textAlign:'center', padding:'4rem 1rem', color:'var(--forest-400)'}}>
+      <div style={{fontSize:'3rem', marginBottom:12}}>{traps.length === 0 ? '🌲' : '🔍'}</div>
+      <div style={{fontWeight:800, fontSize:'0.9rem'}}>{traps.length === 0 ? '罠がまだありません' : '該当なし'}</div>
+      {traps.length === 0 && <div style={{fontSize:'0.75rem', marginTop:4, color:'var(--forest-300)'}}>右下 ＋ ボタンで追加</div>}
+    </div>
+  );
+  return (
+    <div>
+      {filtered.map(t => (
+        <TrapCard key={t.id} trap={t}
+          isOpen={openCardId === t.id} isSel={selId === t.id}
+          onToggle={() => setOpenCardId(openCardId === t.id ? null : t.id)}
+          onEdit={e => onEdit(t, e)}
+          onDel={() => onDel(t.id)}
+          onFly={() => onFly(t)}
+          onDetail={() => onDetail(t.id)}
+          desktop={desktop}/>
+      ))}
+    </div>
+  );
+}
+
+// ── DetailView ───────────────────────────────────────────────
+function DetailView({trap:t, onClose, onEdit, onDel, onAddSighting, onDelSighting, onFly}) {
+  const tt = TRAP_TYPES[t.type];
+  const st = TRAP_STATUS[t.status];
+  return (
+    <div className="detail-view">
+      <div style={{position:'sticky', top:0, zIndex:10, background:'linear-gradient(135deg,var(--forest-900),var(--forest-700))', color:'white', padding:'12px 16px', display:'flex', alignItems:'center', gap:12}}>
+        <button onClick={onClose} style={{background:'rgba(255,255,255,0.15)', border:'1.5px solid rgba(255,255,255,0.25)', borderRadius:'0.75rem', color:'white', padding:'6px 12px', fontSize:'0.8rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:4}}>← 戻る</button>
+        <div style={{flex:1}}>
+          <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
+            <span style={{fontSize:'1.25rem'}}>{tt.emoji}</span>
+            <span style={{fontWeight:900, fontSize:'1.1rem', fontFamily:"'JetBrains Mono', monospace", letterSpacing:'0.06em'}}>{t.trapId}</span>
+            <span className="status-badge" style={{background:st.bg, color:st.text, borderColor:st.border, fontSize:'10px'}}>{STATUS_ICON[t.status]} {t.status}</span>
+          </div>
+          <div style={{fontSize:'0.72rem', color:'rgba(176,228,192,0.8)', marginTop:2, fontWeight:600}}>{tt.label} · 設置 {fmtDate(t.installedAt)}</div>
+        </div>
+        <button onClick={() => onEdit(t)} style={{background:'rgba(255,255,255,0.15)', border:'1.5px solid rgba(255,255,255,0.25)', borderRadius:'0.75rem', color:'white', padding:'6px 12px', fontSize:'0.8rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>編集</button>
+      </div>
+
+      <div style={{padding:'16px', paddingBottom:'2rem'}}>
+        {t.lat && t.lng && (
+          <div style={{background:'white', borderRadius:'var(--radius-card)', padding:'14px 16px', marginBottom:12, boxShadow:'var(--shadow-card)', border:'1.5px solid var(--forest-100)'}}>
+            <div style={{fontSize:'0.72rem', fontWeight:800, color:'var(--forest-500)', marginBottom:8}}>📍 GPS座標</div>
+            <div style={{fontFamily:"'JetBrains Mono', monospace", fontSize:'0.85rem', color:'var(--forest-900)', marginBottom:8}}>{t.lat}, {t.lng}</div>
+            <button onClick={onFly} style={{fontSize:'0.78rem', fontWeight:800, color:'var(--forest-600)', background:'var(--forest-50)', border:'1.5px solid var(--forest-200)', borderRadius:'0.75rem', padding:'6px 14px', cursor:'pointer', fontFamily:'inherit'}}>🗺 地図で確認する</button>
+          </div>
+        )}
+        {t.notes && (
+          <div style={{background:'white', borderRadius:'var(--radius-card)', padding:'14px 16px', marginBottom:12, boxShadow:'var(--shadow-card)', border:'1.5px solid var(--forest-100)'}}>
+            <div style={{fontSize:'0.72rem', fontWeight:800, color:'var(--forest-500)', marginBottom:8}}>📝 メモ</div>
+            <p style={{fontSize:'0.9rem', color:'var(--forest-900)', lineHeight:1.7, margin:0, whiteSpace:'pre-wrap'}}>{t.notes}</p>
+          </div>
+        )}
+
+        <div style={{background:'white', borderRadius:'var(--radius-card)', padding:'14px 16px', boxShadow:'var(--shadow-card)', border:'1.5px solid var(--forest-100)', marginBottom:12}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12}}>
+            <div>
+              <div style={{fontSize:'0.85rem', fontWeight:900, color:'var(--forest-900)'}}>📷 トレイルカメラ記録</div>
+              <div style={{fontSize:'0.7rem', color:'var(--forest-400)', fontWeight:600}}>{t.sightings.length}件の記録</div>
+            </div>
+            <button onClick={onAddSighting} style={{background:'var(--forest-600)', color:'white', border:'none', borderRadius:'0.875rem', padding:'8px 14px', fontSize:'0.8rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5}}>＋ 記録追加</button>
+          </div>
+          {t.sightings.length === 0 ? (
+            <div style={{textAlign:'center', padding:'24px 0', color:'var(--forest-300)'}}>
+              <div style={{fontSize:'2rem', marginBottom:8}}>📷</div>
+              <div style={{fontSize:'0.82rem', fontWeight:700}}>目撃記録なし</div>
+            </div>
+          ) : (
+            <div>
+              {[...t.sightings].reverse().map(s => {
+                const animal = AMAP[s.animal] || AMAP['other'];
+                return (
+                  <div key={s.id} className="sighting-item">
+                    <div style={{fontSize:'1.75rem', lineHeight:1, flexShrink:0, marginTop:2}}>{animal.emoji}</div>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontWeight:800, fontSize:'0.88rem', color:'var(--forest-900)'}}>{animal.label}</div>
+                      <div style={{fontSize:'0.72rem', color:'var(--forest-400)', fontWeight:600, marginTop:2}}>{fmtDT(s.timestamp)}</div>
+                      {s.notes && <div style={{fontSize:'0.82rem', color:'var(--forest-700)', marginTop:4, lineHeight:1.6, whiteSpace:'pre-wrap'}}>{s.notes}</div>}
+                    </div>
+                    <button onClick={() => onDelSighting(s.id)} style={{flexShrink:0, fontSize:'0.68rem', color:'#DC2626', background:'none', border:'none', cursor:'pointer', padding:'4px', fontFamily:'inherit', fontWeight:800}}>削除</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <button onClick={onDel} style={{width:'100%', padding:'14px', background:'#FFF5F5', border:'2px solid #FECACA', borderRadius:'var(--radius-btn)', fontSize:'0.9rem', fontWeight:800, color:'#DC2626', cursor:'pointer', fontFamily:'inherit'}}>
+          🗑 この罠を削除する
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── TrapForm ─────────────────────────────────────────────────
+function TrapForm({draft, setDraft, editId, gpsLoading, gpsError, onSave, onClose, onGPS, onPick}) {
+  const set = (k, v) => setDraft({...draft, [k]:v});
+  return (
+    <div className="sheet-overlay" onClick={onClose}>
+      <div className="sheet-panel" onClick={e => e.stopPropagation()}>
+        <div className="sheet-grip"/>
+        <div className="sheet-body">
+          <h2 style={{fontWeight:900, fontSize:'1.05rem', color:'var(--forest-900)', marginBottom:'1.25rem', display:'flex', alignItems:'center', gap:8}}>
+            {editId ? '🖊 罠を編集' : '🌿 新しい罠を追加'}
+          </h2>
+
+          <div style={{marginBottom:'1rem'}}>
+            <label style={labelSt}>認識番号</label>
+            <input className="field-input" style={{fontFamily:"'JetBrains Mono', monospace", fontWeight:700, letterSpacing:'0.05em'}} placeholder="A-001" value={draft.trapId} onChange={e => set('trapId', e.target.value)}/>
+          </div>
+
+          <div style={{marginBottom:'1rem'}}>
+            <label style={labelSt}>罠の種類</label>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8}}>
+              {Object.entries(TRAP_TYPES).map(([id, tt]) => (
+                <button key={id} onClick={() => set('type', id)}
+                  style={{display:'flex', flexDirection:'column', alignItems:'center', padding:'12px 4px', borderRadius:'var(--radius-card)', border:'2.5px solid ' + (draft.type===id ? tt.color : 'var(--forest-200)'), background: draft.type===id ? tt.color + '14' : 'white', color: draft.type===id ? tt.color : 'var(--forest-400)', fontWeight:800, cursor:'pointer', transition:'all 0.14s', transform: draft.type===id ? 'scale(1.05)' : 'scale(1)', fontFamily:'inherit'}}>
+                  <span style={{fontSize:'1.75rem', lineHeight:1, marginBottom:5}}>{tt.emoji}</span>
+                  <span style={{fontSize:'0.72rem'}}>{tt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{marginBottom:'1rem'}}>
+            <label style={labelSt}>状態</label>
+            <div style={{display:'flex', gap:8}}>
+              {['稼働中','要確認','撤去済み'].map(s => {
+                const sc = TRAP_STATUS[s];
+                const active = draft.status === s;
+                return (
+                  <button key={s} onClick={() => set('status', s)}
+                    style={{flex:1, height:'2.75rem', borderRadius:'var(--radius-btn)', border:'2px solid ' + (active ? sc.border : 'var(--forest-200)'), background: active ? sc.bg : 'white', color: active ? sc.text : 'var(--forest-400)', fontSize:'0.8rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>
+                    {STATUS_ICON[s]} {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{marginBottom:'1rem'}}>
+            <label style={labelSt}>設置日</label>
+            <input type="date" className="field-input" value={draft.installedAt} onChange={e => set('installedAt', e.target.value)}/>
+          </div>
+
+          <div style={{marginBottom:'1rem'}}>
+            <label style={labelSt}>GPS座標</label>
+            <div style={{display:'flex', gap:8, marginBottom:8}}>
+              {[['lat','緯度 35.xxxx'],['lng','経度 139.xxxx']].map(([k,ph]) => (
+                <input key={k} className="field-input" style={{flex:1, minWidth:0, fontFamily:"'JetBrains Mono', monospace", fontSize:'0.82rem'}} placeholder={ph} value={draft[k]} onChange={e => set(k, e.target.value)}/>
+              ))}
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
+              <button onClick={onGPS} disabled={gpsLoading} style={{height:'2.875rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', background:'white', color:'var(--forest-600)', fontSize:'0.85rem', fontWeight:800, cursor:'pointer', opacity:gpsLoading ? 0.55 : 1, fontFamily:'inherit'}}>
+                {gpsLoading ? '⏳ 取得中…' : '📍 現在地'}
+              </button>
+              <button onClick={onPick} style={{height:'2.875rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', background:'white', color:'var(--forest-600)', fontSize:'0.85rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>
+                🗺 地図で指定
+              </button>
+            </div>
+            {gpsError && <p style={{fontSize:'0.75rem', color:'#DC2626', marginTop:6, fontWeight:700}}>{gpsError}</p>}
+          </div>
+
+          <div style={{marginBottom:'1.25rem'}}>
+            <label style={labelSt}>メモ</label>
+            <textarea className="field-input" rows={3} placeholder="設置場所の特徴、餌の種類など…" value={draft.notes} onChange={e => set('notes', e.target.value)}/>
+          </div>
+
+          <div style={{display:'flex', gap:12}}>
+            <button onClick={onClose} style={{flex:1, height:'3rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', color:'var(--forest-600)', background:'white', fontSize:'0.9rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>キャンセル</button>
+            <button onClick={onSave} disabled={!draft.trapId.trim()} style={{flex:1, height:'3rem', borderRadius:'var(--radius-btn)', border:'none', background:'linear-gradient(135deg,var(--forest-500),var(--forest-800))', color:'white', fontSize:'0.9rem', fontWeight:900, cursor:'pointer', opacity:!draft.trapId.trim() ? 0.4 : 1, fontFamily:'inherit'}}>保存する 🌿</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SightingForm ─────────────────────────────────────────────
+function SightingForm({draft, setDraft, onSave, onClose}) {
+  const set = (k, v) => setDraft({...draft, [k]:v});
+  return (
+    <div className="sheet-overlay" onClick={onClose}>
+      <div className="sheet-panel" onClick={e => e.stopPropagation()}>
+        <div className="sheet-grip"/>
+        <div className="sheet-body">
+          <h2 style={{fontWeight:900, fontSize:'1.05rem', color:'var(--forest-900)', marginBottom:'1.25rem'}}>📷 目撃記録を追加</h2>
+
+          <div style={{marginBottom:'1rem'}}>
+            <label style={labelSt}>動物の種類</label>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8}}>
+              {ANIMALS.map(a => (
+                <button key={a.id} onClick={() => set('animal', a.id)}
+                  style={{display:'flex', flexDirection:'column', alignItems:'center', padding:'10px 4px', borderRadius:'var(--radius-card)', border:'2.5px solid ' + (draft.animal===a.id ? 'var(--forest-500)' : 'var(--forest-200)'), background: draft.animal===a.id ? 'var(--forest-50)' : 'white', color: draft.animal===a.id ? 'var(--forest-700)' : 'var(--forest-400)', fontWeight:800, cursor:'pointer', transform: draft.animal===a.id ? 'scale(1.05)' : 'scale(1)', transition:'all 0.14s', fontFamily:'inherit'}}>
+                  <span style={{fontSize:'1.75rem', lineHeight:1, marginBottom:4}}>{a.emoji}</span>
+                  <span style={{fontSize:'0.68rem'}}>{a.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{marginBottom:'1rem'}}>
+            <label style={labelSt}>日時</label>
+            <input type="datetime-local" className="field-input" value={draft.timestamp} onChange={e => set('timestamp', e.target.value)}/>
+          </div>
+
+          <div style={{marginBottom:'1.25rem'}}>
+            <label style={labelSt}>メモ</label>
+            <textarea className="field-input" rows={3} placeholder="頭数・行動・カメラの設定など…" value={draft.notes} onChange={e => set('notes', e.target.value)}/>
+          </div>
+
+          <div style={{display:'flex', gap:12}}>
+            <button onClick={onClose} style={{flex:1, height:'3rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', color:'var(--forest-600)', background:'white', fontSize:'0.9rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>キャンセル</button>
+            <button onClick={onSave} style={{flex:1, height:'3rem', borderRadius:'var(--radius-btn)', border:'none', background:'linear-gradient(135deg,var(--forest-500),var(--forest-800))', color:'white', fontSize:'0.9rem', fontWeight:900, cursor:'pointer', fontFamily:'inherit'}}>記録する 📷</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────
+function App() {
+  const [traps, setTraps]       = useState(loadTraps);
+  const [mobileTab, setMobTab]  = useState('map');
+  const [filterSt, setFSt]      = useState('すべて');
+  const [filterTy, setFTy]      = useState('すべて');
+  const [query, setQuery]       = useState('');
+  const [detailId, setDetailId] = useState(null);
+  const [selId, setSelId]       = useState(null);
+  const [openCardId, setOpenCardId] = useState(null);
+  const [showTrapForm, setSF]   = useState(false);
+  const [showSightForm, setSSF] = useState(false);
+  const [editTrapId, setEditId] = useState(null);
+  const [delTrapId, setDelId]   = useState(null);
+  const [picking, setPicking]   = useState(false);
+  const [draft, setDraft]       = useState(null);
+  const [sDraft, setSDraft]     = useState(null);
+  const [gpsLoading, setGpsLd]  = useState(false);
+  const [gpsError, setGpsErr]   = useState('');
+  const [offline, setOffline]   = useState(!navigator.onLine);
+  const [caching, setCaching]   = useState(false);
+  const [toast, setToast]       = useState('');
+
+  const mapDiv  = useRef(null);
+  const mapRef  = useRef(null);
+  const markers = useRef({});
+  const pickRef = useRef(false);
+
+  useEffect(() => localStorage.setItem(SK, JSON.stringify(traps)), [traps]);
+
+  useEffect(() => {
+    const on = () => setOffline(false), off = () => setOffline(true);
+    window.addEventListener('online', on); window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
+
+  useEffect(() => {
+    if (!mapDiv.current || mapRef.current) return;
+    const map = L.map(mapDiv.current, {center:CENTER, zoom:ZOOM0, zoomControl:false});
+    L.control.zoom({position:'bottomright'}).addTo(map);
+    new OfflineTiles('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+      attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>',
+      maxZoom:18
+    }).addTo(map);
+    map.on('click', e => {
+      if (!pickRef.current) return;
+      setDraft(d => d ? {...d, lat:e.latlng.lat.toFixed(6), lng:e.latlng.lng.toFixed(6)} : d);
+      pickRef.current = false;
+      setPicking(false);
+      setSF(true);
+    });
+    mapRef.current = map;
+    return () => { map.remove(); mapRef.current = null; };
+  }, []);
+
+  useEffect(() => { pickRef.current = picking; }, [picking]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const ids = new Set(traps.map(t => t.id));
+    Object.keys(markers.current).forEach(id => {
+      if (!ids.has(id)) { markers.current[id].remove(); delete markers.current[id]; }
+    });
+    traps.forEach(t => {
+      const lat = parseFloat(t.lat), lng = parseFloat(t.lng);
+      if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+      const sel = selId === t.id;
+      if (markers.current[t.id]) {
+        markers.current[t.id].setLatLng([lat,lng]).setIcon(makePin(t,sel));
+        markers.current[t.id].setPopupContent(makePopup(t));
+      } else {
+        const m = L.marker([lat,lng], {icon:makePin(t,sel)}).addTo(map).bindPopup(makePopup(t), {maxWidth:260});
+        m.on('click', () => setSelId(p => p===t.id ? null : t.id));
+        markers.current[t.id] = m;
+      }
+    });
+  }, [traps, selId]);
+
+  useEffect(() => {
+    if (mobileTab === 'map') setTimeout(() => mapRef.current && mapRef.current.invalidateSize(), 60);
+  }, [mobileTab]);
+
+  const filtered = traps.filter(t => {
+    if (filterSt !== 'すべて' && t.status !== filterSt) return false;
+    if (filterTy !== 'すべて' && t.type   !== filterTy) return false;
+    if (query && !t.trapId.includes(query) && !t.notes.includes(query)) return false;
+    return true;
+  });
+
+  const counts = {'稼働中':traps.filter(t=>t.status==='稼働中').length,'要確認':traps.filter(t=>t.status==='要確認').length,'撤去済み':traps.filter(t=>t.status==='撤去済み').length};
+
+  const openNewTrap = useCallback(() => {
+    setEditId(null);
+    setDraft({trapId:nextTrapId(traps), type:'kukuri', status:'稼働中', installedAt:new Date().toISOString().slice(0,10), lat:'', lng:'', notes:''});
+    setGpsErr(''); setSF(true);
+  }, [traps]);
+
+  const openEditTrap = useCallback((t, e) => {
+    e && e.stopPropagation();
+    setEditId(t.id);
+    setDraft({trapId:t.trapId, type:t.type, status:t.status, installedAt:t.installedAt, lat:t.lat, lng:t.lng, notes:t.notes});
+    setGpsErr(''); setSF(true);
+  }, []);
+
+  const saveTrap = useCallback(() => {
+    if (!draft || !draft.trapId.trim()) return;
+    const now = new Date().toISOString();
+    if (editTrapId) {
+      setTraps(p => p.map(t => t.id===editTrapId ? {...t, ...draft, updatedAt:now} : t));
+    } else {
+      setTraps(p => [{...draft, id:crypto.randomUUID(), sightings:[], createdAt:now, updatedAt:now}, ...p]);
+    }
+    setSF(false); setDraft(null);
+  }, [draft, editTrapId]);
+
+  const deleteTrap = useCallback((id) => {
+    setTraps(p => p.filter(t => t.id!==id));
+    setDelId(null);
+    if (detailId===id) setDetailId(null);
+    if (selId===id) setSelId(null);
+  }, [detailId, selId]);
+
+  const openNewSighting = useCallback(() => {
+    setSDraft({timestamp:new Date().toISOString().slice(0,16), animal:'shika', notes:''});
+    setSSF(true);
+  }, []);
+
+  const saveSighting = useCallback(() => {
+    if (!sDraft || !detailId) return;
+    const sighting = {id:crypto.randomUUID(), ...sDraft};
+    setTraps(p => p.map(t => t.id===detailId ? {...t, sightings:[...t.sightings, sighting], updatedAt:new Date().toISOString()} : t));
+    setSSF(false); setSDraft(null);
+  }, [sDraft, detailId]);
+
+  const deleteSighting = useCallback((trapId, sightingId) => {
+    setTraps(p => p.map(t => t.id===trapId ? {...t, sightings:t.sightings.filter(s=>s.id!==sightingId), updatedAt:new Date().toISOString()} : t));
+  }, []);
+
+  const getGPS = useCallback(() => {
+    if (!navigator.geolocation) { setGpsErr('GPSに対応していません'); return; }
+    setGpsLd(true); setGpsErr('');
+    navigator.geolocation.getCurrentPosition(
+      pos => { setDraft(d => d ? {...d, lat:pos.coords.latitude.toFixed(6), lng:pos.coords.longitude.toFixed(6)} : d); setGpsLd(false); },
+      () => { setGpsErr('GPS取得失敗。屋外で再試行してください'); setGpsLd(false); },
+      {enableHighAccuracy:true, timeout:15000}
+    );
+  }, []);
+
+  const startPick = useCallback(() => { setSF(false); setPicking(true); setMobTab('map'); }, []);
+
+  const flyToTrap = useCallback((t) => {
+    const lat = parseFloat(t.lat), lng = parseFloat(t.lng);
+    if (isNaN(lat)||isNaN(lng)) return;
+    setMobTab('map'); setSelId(t.id);
+    setTimeout(() => {
+      if (mapRef.current) {
+        mapRef.current.flyTo([lat,lng], 17, {duration:0.8});
+        setTimeout(() => markers.current[t.id] && markers.current[t.id].openPopup(), 900);
+      }
+    }, 80);
+  }, []);
+
+  const handleCache = useCallback(async () => {
+    if (!mapRef.current || caching) return;
+    setCaching(true); setToast('🗺 タイルを保存中…');
+    const n = await cacheViewport(mapRef.current.getBounds(), mapRef.current.getZoom());
+    setCaching(false);
+    if (n===-1) setToast('⚠️ キャッシュ非対応');
+    else if (n===-2) setToast('⚠️ エリア大きすぎ。ズームインして再試行');
+    else setToast('✅ ' + n + 'タイル保存！オフライン利用可能');
+    setTimeout(() => setToast(''), 4000);
+  }, [caching]);
+
+  const detailTrap = traps.find(t => t.id===detailId) || null;
+
+  return (
+    <div style={{height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--parchment)'}}>
+      {offline && <div className="offline-bar">📡 オフラインモード — キャッシュデータを表示中</div>}
+
+      <header style={{background:'linear-gradient(135deg,var(--forest-900) 0%,var(--forest-700) 100%)', color:'white', padding:'10px 16px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontSize:'1rem', fontWeight:900, letterSpacing:'0.01em', lineHeight:1.3}}>🌲 横瀬町 罠猟ノート</div>
+          <div style={{fontSize:'0.68rem', color:'rgba(176,228,192,0.85)', display:'flex', gap:10, marginTop:3, fontWeight:700}}>
+            <span>全{traps.length}件</span>
+            <span style={{color:'#6EE7B7'}}>🟢 {counts['稼働中']}</span>
+            <span style={{color:'#FCD34D'}}>🟡 {counts['要確認']}</span>
+            <span style={{color:'#94A3B8'}}>⚫ {counts['撤去済み']}</span>
+          </div>
+        </div>
+        <button onClick={openNewTrap} className="desktop-addbtn"
+          style={{display:'none', alignItems:'center', gap:8, background:'rgba(255,255,255,0.14)', border:'1.5px solid rgba(255,255,255,0.28)', borderRadius:'var(--radius-btn)', color:'white', fontSize:'0.875rem', fontWeight:800, padding:'8px 14px', cursor:'pointer', fontFamily:'inherit'}}>
+          ＋ 罠を追加
+        </button>
+      </header>
+
+      <div style={{flex:1, display:'flex', overflow:'hidden', position:'relative'}}>
+        {/* Desktop sidebar */}
+        <div className="desktop-sidebar" style={{flexDirection:'column', width:'22rem', background:'white', borderRight:'1.5px solid var(--forest-100)', overflow:'hidden', display:'none'}}>
+          <FilterBar query={query} setQuery={setQuery} filterSt={filterSt} setFSt={setFSt} filterTy={filterTy} setFTy={setFTy}/>
+          <div style={{flex:1, overflowY:'auto'}}>
+            <TrapList filtered={filtered} traps={traps} openCardId={openCardId} setOpenCardId={setOpenCardId} selId={selId} onEdit={openEditTrap} onDel={id => setDelId(id)} onFly={flyToTrap} onDetail={id => setDetailId(id)} desktop/>
+          </div>
+        </div>
+
+        {/* Map */}
+        <div className={picking ? 'pick-mode' : ''} style={{flex:1, position:'relative'}}>
+          <div style={{display: mobileTab==='list' ? 'none' : 'block', position:'absolute', inset:0}}>
+            <div ref={mapDiv} style={{width:'100%', height:'100%'}}/>
+            {picking && (
+              <>
+                <div className="pick-banner">📍 罠の位置をタップして設定</div>
+                <button onClick={() => { setPicking(false); setSF(true); }} style={{position:'absolute', top:'3.5rem', left:'50%', transform:'translateX(-50%)', zIndex:500, background:'white', color:'var(--forest-700)', border:'2px solid var(--forest-300)', borderRadius:'9999px', padding:'8px 20px', fontSize:'0.8rem', fontWeight:800, cursor:'pointer', boxShadow:'0 4px 16px rgba(0,0,0,0.18)', fontFamily:'inherit'}}>← キャンセル</button>
+              </>
+            )}
+            {!picking && (
+              <button onClick={handleCache} disabled={caching} style={{position:'absolute', top:'1rem', left:'1rem', zIndex:400, background:'rgba(255,255,255,0.92)', color:'var(--forest-700)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', padding:'8px 14px', fontSize:'0.72rem', fontWeight:800, cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', opacity:caching ? 0.6 : 1, fontFamily:'inherit', transition:'opacity 0.2s'}}>
+                {caching ? '⏳ 保存中…' : '🗺 このエリアを保存'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile list */}
+        {mobileTab === 'list' && (
+          <div className="mobile-only" style={{position:'absolute', inset:0, background:'var(--parchment)', display:'flex', flexDirection:'column', overflow:'hidden'}}>
+            <FilterBar query={query} setQuery={setQuery} filterSt={filterSt} setFSt={setFSt} filterTy={filterTy} setFTy={setFTy} mobile/>
+            <div style={{flex:1, overflowY:'auto', padding:'8px 12px', paddingBottom:'7.5rem'}}>
+              <TrapList filtered={filtered} traps={traps} openCardId={openCardId} setOpenCardId={setOpenCardId} selId={selId} onEdit={openEditTrap} onDel={id => setDelId(id)} onFly={t => { flyToTrap(t); setMobTab('map'); }} onDetail={id => setDetailId(id)}/>
+            </div>
+          </div>
+        )}
+
+        {/* Detail view */}
+        {detailTrap && (
+          <DetailView trap={detailTrap} onClose={() => setDetailId(null)} onEdit={t => openEditTrap(t)} onDel={() => setDelId(detailTrap.id)} onAddSighting={openNewSighting} onDelSighting={(sid) => deleteSighting(detailTrap.id, sid)} onFly={() => flyToTrap(detailTrap)}/>
+        )}
+      </div>
+
+      {/* Mobile FAB */}
+      {!picking && !detailTrap && (
+        <button className="fab mobile-only" onClick={openNewTrap} aria-label="罠を追加">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      )}
+
+      {/* Mobile bottom nav */}
+      <nav className="bottom-nav mobile-only">
+        <button className={'nav-btn' + (mobileTab==='map' ? ' active' : '')} onClick={() => setMobTab('map')}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-10l6-3m6 16l-4.553 2.276A1 1 0 0115 21.382V10.618a1 1 0 01.553-.894L21 7v13z"/></svg>
+          地図
+        </button>
+        <button className={'nav-btn' + (mobileTab==='list' ? ' active' : '')} onClick={() => setMobTab('list')}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4"/></svg>
+          一覧
+        </button>
+      </nav>
+
+      {toast && <div className="toast">{toast}</div>}
+
+      {showTrapForm && draft && (
+        <TrapForm draft={draft} setDraft={setDraft} editId={editTrapId} gpsLoading={gpsLoading} gpsError={gpsError} onSave={saveTrap} onClose={() => { setSF(false); setDraft(null); }} onGPS={getGPS} onPick={startPick}/>
+      )}
+
+      {showSightForm && sDraft && (
+        <SightingForm draft={sDraft} setDraft={setSDraft} onSave={saveSighting} onClose={() => { setSSF(false); setSDraft(null); }}/>
+      )}
+
+      {delTrapId && (
+        <div className="sheet-overlay" onClick={() => setDelId(null)}>
+          <div className="sheet-panel" style={{maxWidth:'24rem', margin:'0 auto'}} onClick={e => e.stopPropagation()}>
+            <div className="sheet-grip"/>
+            <div className="sheet-body" style={{textAlign:'center'}}>
+              <div style={{fontSize:'3.5rem', marginBottom:8}}>🗑️</div>
+              <div style={{fontWeight:900, fontSize:'1.05rem', color:'var(--forest-900)', marginBottom:6}}>削除しますか？</div>
+              <div style={{fontSize:'0.87rem', color:'#5A7A5A', marginBottom:24, lineHeight:1.6}}>
+                「{(traps.find(t=>t.id===delTrapId)||{}).trapId}」<br/>
+                <span style={{fontSize:'0.75rem', color:'#90AA90'}}>この操作は元に戻せません</span>
+              </div>
+              <div style={{display:'flex', gap:12}}>
+                <button onClick={() => setDelId(null)} style={{flex:1, height:'3rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', color:'var(--forest-600)', background:'white', fontSize:'0.9rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>キャンセル</button>
+                <button onClick={() => deleteTrap(delTrapId)} style={{flex:1, height:'3rem', borderRadius:'var(--radius-btn)', border:'none', background:'#DC2626', color:'white', fontSize:'0.9rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>削除する</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
