@@ -37,7 +37,7 @@ body{font-family:'Zen Maru Gothic','Hiragino Sans','YuGothic',sans-serif;backgro
 .leaflet-control-zoom a{border-radius:.75rem!important;background:white!important;color:var(--forest-700)!important;border:1.5px solid var(--forest-200)!important;font-weight:800!important;font-size:1.1rem!important;margin-bottom:4px!important;box-shadow:var(--shadow-card)!important;width:36px!important;height:36px!important;line-height:34px!important}
 
 /* Bottom Sheet */
-.sheet-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.42);backdrop-filter:blur(4px);display:flex;flex-direction:column;justify-content:flex-end;animation:overlay-in .18s ease}
+.sheet-overlay{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.42);backdrop-filter:blur(4px);display:flex;flex-direction:column;justify-content:flex-end;animation:overlay-in .18s ease}
 @keyframes overlay-in{from{opacity:0}to{opacity:1}}
 .sheet-panel{background:white;border-radius:1.75rem 1.75rem 0 0;padding-bottom:max(1.5rem,env(safe-area-inset-bottom));max-height:94vh;overflow-y:auto;animation:sheet-in .24s cubic-bezier(0.32,0.72,0,1)}
 @keyframes sheet-in{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -51,15 +51,12 @@ body{font-family:'Zen Maru Gothic','Hiragino Sans','YuGothic',sans-serif;backgro
   .sheet-body{padding:1.75rem}
 }
 
-/* FAB add button — wide pill above bottom nav */
-.fab-add{position:fixed;left:1rem;right:1rem;bottom:calc(4.75rem + env(safe-area-inset-bottom));z-index:200;height:3.25rem;border-radius:1.5rem;background:linear-gradient(135deg,var(--forest-500),var(--forest-800));color:white;border:none;box-shadow:var(--shadow-fab);display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;font-family:inherit;font-size:1rem;font-weight:900;letter-spacing:.02em;transition:transform .14s,box-shadow .14s}
+/* FAB add button — wide pill above bottom nav, always on top */
+.fab-add{position:fixed;left:1rem;right:1rem;bottom:calc(4.75rem + env(safe-area-inset-bottom));z-index:310;height:3.25rem;border-radius:1.5rem;background:linear-gradient(135deg,var(--forest-500),var(--forest-800));color:white;border:none;box-shadow:var(--shadow-fab);display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;font-family:inherit;font-size:1rem;font-weight:900;letter-spacing:.02em;transition:transform .14s,box-shadow .14s}
 .fab-add:active{transform:scale(0.97)}
-/* Legacy FAB (map locate btn) */
-.fab{position:fixed;right:1.25rem;bottom:calc(5.25rem + env(safe-area-inset-bottom));z-index:200;width:3.25rem;height:3.25rem;border-radius:1.125rem;background:white;color:var(--forest-700);border:1.5px solid var(--forest-200);box-shadow:var(--shadow-card);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .14s;font-size:1.25rem}
-.fab:active{transform:scale(0.88)}
 
 /* Bottom Nav */
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:200;height:calc(4.5rem + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:white;border-top:1.5px solid var(--forest-100);display:flex;box-shadow:0 -4px 24px rgba(30,80,40,0.07)}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:300;height:calc(4.5rem + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:white;border-top:1.5px solid var(--forest-100);display:flex;box-shadow:0 -4px 24px rgba(30,80,40,0.07)}
 .nav-btn{flex:1;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:.5rem;color:#a8bca8;font-family:inherit;font-size:.6rem;font-weight:700;letter-spacing:.04em;transition:color .15s}
 .nav-btn.active{color:var(--forest-600)}
 
@@ -78,8 +75,8 @@ textarea.field-input{height:auto;padding:.875rem 1rem;resize:none;line-height:1.
 /* Status badge */
 .status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:800;border:1.5px solid;font-family:inherit}
 
-/* Detail view */
-.detail-view{position:absolute;inset:0;z-index:100;background:var(--parchment);animation:slide-in .22s cubic-bezier(0.32,0.72,0,1);overflow-y:auto}
+/* Detail view — fixed so pinch-zoom can't break it */
+.detail-view{position:fixed;inset:0;z-index:400;background:var(--parchment);animation:slide-in .22s cubic-bezier(0.32,0.72,0,1);overflow-y:auto}
 @keyframes slide-in{from{transform:translateX(100%)}to{transform:translateX(0)}}
 
 /* Offline bar */
@@ -304,6 +301,7 @@ function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDeta
         <div style={{display:'flex', flexDirection:'column', gap:4, flexShrink:0}}>
           <button onClick={e => {e.stopPropagation(); onDetail();}} style={{fontSize:'0.72rem', fontWeight:800, padding:'5px 10px', borderRadius:'0.625rem', background:'var(--forest-50)', color:'var(--forest-600)', border:'1.5px solid var(--forest-200)', cursor:'pointer', fontFamily:'inherit'}}>詳細</button>
           <button onClick={e => {e.stopPropagation(); onEdit(e);}} style={{fontSize:'0.72rem', fontWeight:800, padding:'5px 10px', borderRadius:'0.625rem', background:'var(--amber-100)', color:'var(--amber-500)', border:'1.5px solid #FCD34D', cursor:'pointer', fontFamily:'inherit'}}>編集</button>
+          <button onClick={e => {e.stopPropagation(); onDel();}} style={{fontSize:'0.72rem', fontWeight:800, padding:'5px 10px', borderRadius:'0.625rem', background:'#FFF5F5', color:'#DC2626', border:'1.5px solid #FCA5A5', cursor:'pointer', fontFamily:'inherit'}}>削除</button>
         </div>
       </div>
 
@@ -583,10 +581,13 @@ function App() {
   const [locating, setLocating] = useState(false);
   const [toast, setToast]       = useState('');
 
-  const mapDiv  = useRef(null);
-  const mapRef  = useRef(null);
-  const markers = useRef({});
-  const pickRef = useRef(false);
+  const mapDiv    = useRef(null);
+  const mapRef    = useRef(null);
+  const markers   = useRef({});
+  const pickRef   = useRef(false);
+  const locDotRef = useRef(null);
+  const locCircRef= useRef(null);
+  const locFlyDone= useRef(false);
 
   useEffect(() => localStorage.setItem(SK, JSON.stringify(traps)), [traps]);
 
@@ -620,8 +621,30 @@ function App() {
       setPicking(false);
       setSF(true);
     });
+
+    map.on('locationfound', e => {
+      setLocating(false);
+      const {latlng, accuracy} = e;
+      // Update blue dot
+      if (locDotRef.current) { locDotRef.current.setLatLng(latlng); } else {
+        locDotRef.current = L.circleMarker(latlng, {radius:8, fillColor:'#4285F4', fillOpacity:1, color:'white', weight:2.5, zIndexOffset:900}).addTo(map);
+      }
+      if (locCircRef.current) { locCircRef.current.setLatLng(latlng).setRadius(accuracy); } else {
+        locCircRef.current = L.circle(latlng, {radius:accuracy, fillColor:'#4285F4', fillOpacity:0.12, color:'#4285F4', weight:1}).addTo(map);
+      }
+      if (!locFlyDone.current) {
+        locFlyDone.current = true;
+        map.flyTo(latlng, 17, {duration:0.8});
+      }
+    });
+    map.on('locationerror', () => {
+      setLocating(false);
+      setToast('⚠️ 現在地の取得に失敗しました');
+      setTimeout(() => setToast(''), 3000);
+    });
+
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; };
+    return () => { map.stopLocate(); map.remove(); mapRef.current = null; };
   }, []);
 
   useEffect(() => { pickRef.current = picking; }, [picking]);
@@ -744,20 +767,11 @@ function App() {
   }, [caching]);
 
   const handleLocate = useCallback(() => {
-    if (!navigator.geolocation || locating) return;
+    if (!mapRef.current || locating) return;
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        setLocating(false);
-        const {latitude:lat, longitude:lng} = pos.coords;
-        setMobTab('map');
-        setTimeout(() => {
-          if (mapRef.current) mapRef.current.flyTo([lat,lng], 17, {duration:0.8});
-        }, 50);
-      },
-      () => { setLocating(false); setToast('⚠️ 現在地の取得に失敗しました'); setTimeout(()=>setToast(''),3000); },
-      {enableHighAccuracy:true, timeout:15000}
-    );
+    setMobTab('map');
+    locFlyDone.current = false;
+    mapRef.current.locate({watch:true, enableHighAccuracy:true});
   }, [locating]);
 
   const detailTrap = traps.find(t => t.id===detailId) || null;
@@ -832,7 +846,7 @@ function App() {
       </div>
 
       {/* Mobile wide add button */}
-      {!picking && !detailTrap && (
+      {!picking && (
         <button className="fab-add mobile-only" onClick={openNewTrap} aria-label="罠を追加">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8"><path d="M12 5v14M5 12h14"/></svg>
           ＋ 罠を追加
