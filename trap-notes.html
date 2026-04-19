@@ -607,18 +607,32 @@ function SightingForm({draft, setDraft, onSave, onClose}) {
 
 /* ── LoginScreen ────────────────────────────────────────────── */
 function LoginScreen({onLogin, error}) {
-  const [busy, setBusy] = useState(false);
-  const handleClick = async () => { setBusy(true); await onLogin(); setBusy(false); };
+  const [redirecting, setRedirecting] = useState(false);
+  const handleClick = async () => {
+    setRedirecting(true);
+    await onLogin();
+    // onLogin redirects the browser; if it returns (popup mode), reset
+    setRedirecting(false);
+  };
+
+  if (redirecting) return (
+    <div style={{height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'linear-gradient(160deg,#0D2614 0%,#1E5430 55%,#2B7043 100%)'}}>
+      <div style={{fontSize:'3.5rem', marginBottom:'1rem', animation:'pulse 1.6s ease-in-out infinite'}}>🌲</div>
+      <div style={{color:'rgba(176,228,192,0.9)', fontWeight:800, fontSize:'1rem', letterSpacing:'0.03em', marginBottom:6}}>Googleでログイン中…</div>
+      <div style={{color:'rgba(176,228,192,0.55)', fontWeight:600, fontSize:'0.78rem'}}>Googleアカウントへ移動しています</div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.92)}}`}</style>
+    </div>
+  );
+
   return (
     <div style={{height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'linear-gradient(160deg,#0D2614 0%,#1E5430 55%,#2B7043 100%)', padding:'2rem', position:'relative', overflow:'hidden'}}>
-      {/* decorative tree backdrop */}
       <div style={{position:'absolute', fontSize:'12rem', opacity:0.06, userSelect:'none', pointerEvents:'none', bottom:'-2rem', right:'-2rem', lineHeight:1}}>🌲</div>
       <div style={{position:'absolute', fontSize:'8rem', opacity:0.05, userSelect:'none', pointerEvents:'none', top:'2rem', left:'-1rem', lineHeight:1}}>🌿</div>
 
       <div style={{textAlign:'center', marginBottom:'2.5rem', position:'relative'}}>
         <div style={{fontSize:'4.5rem', marginBottom:'0.75rem', filter:'drop-shadow(0 4px 16px rgba(0,0,0,0.4))'}}>🌲</div>
         <h1 style={{color:'white', fontSize:'1.6rem', fontWeight:900, margin:0, letterSpacing:'0.02em', lineHeight:1.2}}>横瀬町 罠猟ノート</h1>
-        <p style={{color:'rgba(176,228,192,0.75)', fontSize:'0.82rem', fontWeight:700, marginTop:'0.5rem', letterSpacing:'0.05em'}}>YOKOSE TRAP FIELD NOTES</p>
+        <p style={{color:'rgba(176,228,192,0.75)', fontSize:'0.82rem', fontWeight:700, marginTop:'0.5rem', letterSpacing:'0.05em'}}>YOKOZE TRAP FIELD NOTES</p>
       </div>
 
       <div style={{background:'white', borderRadius:'1.5rem', padding:'1.75rem', width:'100%', maxWidth:'22rem', boxShadow:'0 24px 64px rgba(0,0,0,0.45)', position:'relative'}}>
@@ -627,15 +641,15 @@ function LoginScreen({onLogin, error}) {
             ⚠️ {error}
           </div>
         )}
-        <button onClick={handleClick} disabled={busy}
-          style={{width:'100%', height:'3.25rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', background:'white', color:'var(--forest-900)', fontSize:'1rem', fontWeight:800, cursor:busy ? 'not-allowed' : 'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:12, boxShadow:'var(--shadow-card)', transition:'all 0.2s', opacity:busy ? 0.6 : 1}}>
+        <button onClick={handleClick}
+          style={{width:'100%', height:'3.25rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', background:'white', color:'var(--forest-900)', fontSize:'1rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:12, boxShadow:'var(--shadow-card)', transition:'all 0.2s'}}>
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
           </svg>
-          {busy ? '認証中…' : 'Googleでログイン'}
+          Googleでログイン
         </button>
         <p style={{fontSize:'0.72rem', color:'var(--forest-400)', textAlign:'center', marginTop:'1rem', lineHeight:1.7, fontWeight:600}}>
           招待制アプリです。<br/>許可されたGoogleアカウントのみアクセスできます。
@@ -646,12 +660,92 @@ function LoginScreen({onLogin, error}) {
 }
 
 /* ── LoadingScreen ──────────────────────────────────────────── */
-function LoadingScreen() {
+function LoadingScreen({message}) {
+  const isOAuth = window.location.search.includes('code=') || window.location.hash.includes('access_token=');
+  const msg = message || (isOAuth ? 'Googleでログイン中…' : '読み込み中…');
+  const sub = isOAuth ? 'Googleアカウントを確認しています' : '';
   return (
     <div style={{height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'linear-gradient(160deg,#0D2614 0%,#1E5430 55%,#2B7043 100%)'}}>
       <div style={{fontSize:'3.5rem', marginBottom:'1rem', animation:'pulse 1.6s ease-in-out infinite'}}>🌲</div>
-      <div style={{color:'rgba(176,228,192,0.85)', fontWeight:700, fontSize:'0.88rem', letterSpacing:'0.05em'}}>読み込み中…</div>
+      <div style={{color:'rgba(176,228,192,0.9)', fontWeight:800, fontSize:'0.95rem', letterSpacing:'0.04em'}}>{msg}</div>
+      {sub && <div style={{color:'rgba(176,228,192,0.5)', fontWeight:600, fontSize:'0.75rem', marginTop:6}}>{sub}</div>}
       <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.92)}}`}</style>
+    </div>
+  );
+}
+
+/* ── CacheInfoModal ─────────────────────────────────────────── */
+function CacheInfoModal({onClose}) {
+  const [stats, setStats] = useState(null);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      if (!('caches' in window)) { setStats({count:0, sizeKB:0}); return; }
+      try {
+        const cache = await caches.open(TILE_CACHE);
+        const keys = await cache.keys();
+        // Approx 15 KB per GSI tile
+        setStats({count:keys.length, sizeKB:Math.round(keys.length * 15)});
+      } catch { setStats({count:0, sizeKB:0}); }
+    })();
+  }, []);
+
+  const handleClear = async () => {
+    setClearing(true);
+    if ('caches' in window) await caches.delete(TILE_CACHE);
+    setStats({count:0, sizeKB:0});
+    setClearing(false);
+  };
+
+  const fmtSize = (kb) => kb >= 1024 ? (kb/1024).toFixed(1) + ' MB' : kb + ' KB';
+
+  return (
+    <div className="sheet-overlay" onClick={onClose}>
+      <div className="sheet-panel" style={{maxWidth:'26rem', margin:'0 auto'}} onClick={e => e.stopPropagation()}>
+        <div className="sheet-grip"/>
+        <div className="sheet-body">
+          <h2 style={{fontWeight:900, fontSize:'1.1rem', color:'var(--forest-900)', marginBottom:'1.25rem', display:'flex', alignItems:'center', gap:8}}>
+            📊 オフラインキャッシュ情報
+          </h2>
+          {stats === null ? (
+            <div style={{textAlign:'center', padding:'2rem 0', color:'var(--forest-400)', fontWeight:700}}>読み込み中…</div>
+          ) : (
+            <>
+              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:'1.25rem'}}>
+                {[
+                  {label:'保存タイル数', value: stats.count > 0 ? stats.count.toLocaleString() + ' タイル' : 'なし', icon:'🗺'},
+                  {label:'推定容量', value: stats.count > 0 ? fmtSize(stats.sizeKB) : '—', icon:'💾'},
+                ].map(({label, value, icon}) => (
+                  <div key={label} style={{background:'var(--forest-50)', borderRadius:'var(--radius-card)', padding:'14px 16px', border:'1.5px solid var(--forest-100)'}}>
+                    <div style={{fontSize:'1.5rem', marginBottom:6}}>{icon}</div>
+                    <div style={{fontSize:'0.68rem', fontWeight:800, color:'var(--forest-500)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4}}>{label}</div>
+                    <div style={{fontSize:'1rem', fontWeight:900, color:'var(--forest-900)'}}>{value}</div>
+                  </div>
+                ))}
+              </div>
+              {stats.count > 0 ? (
+                <div style={{background:'#FFF5F5', border:'1.5px solid #FECACA', borderRadius:'var(--radius-card)', padding:'12px 16px', marginBottom:'0.5rem'}}>
+                  <div style={{fontSize:'0.78rem', color:'#92400E', fontWeight:700, marginBottom:10, lineHeight:1.5}}>
+                    ⚠️ キャッシュをクリアすると、オフライン時に地図が表示されなくなります。
+                  </div>
+                  <button onClick={handleClear} disabled={clearing}
+                    style={{width:'100%', height:'3rem', borderRadius:'var(--radius-btn)', border:'2px solid #FCA5A5', background: clearing ? '#F3F4F6' : '#FFF5F5', color:'#DC2626', fontSize:'0.95rem', fontWeight:800, cursor: clearing ? 'not-allowed' : 'pointer', fontFamily:'inherit', opacity: clearing ? 0.6 : 1}}>
+                    {clearing ? '⏳ クリア中…' : '🗑 キャッシュをクリア'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{textAlign:'center', padding:'1rem 0', color:'var(--forest-300)', fontWeight:700, fontSize:'0.85rem'}}>
+                  キャッシュはありません
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <div className="sheet-footer">
+          <button onClick={onClose} style={{flex:1, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', color:'var(--forest-600)', background:'white', fontSize:'1rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>閉じる</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -676,9 +770,10 @@ function App({session, onLogout}) {
   const [gpsLoading, setGpsLd]  = useState(false);
   const [gpsError, setGpsErr]   = useState('');
   const [offline, setOffline]   = useState(!navigator.onLine);
-  const [caching, setCaching]   = useState(false);
-  const [locating, setLocating] = useState(false);
-  const [toast, setToast]       = useState('');
+  const [caching, setCaching]         = useState(false);
+  const [locating, setLocating]       = useState(false);
+  const [toast, setToast]             = useState('');
+  const [showCacheModal, setShowCacheModal] = useState(false);
 
   const mapDiv    = useRef(null);
   const mapRef    = useRef(null);
@@ -899,6 +994,11 @@ function App({session, onLogout}) {
 
   const startPick = useCallback(() => { setSF(false); setPicking(true); setMobTab('map'); }, []);
 
+  const flyToBase = useCallback(() => {
+    setMobTab('map');
+    setTimeout(() => { if (mapRef.current) mapRef.current.flyTo(CENTER, ZOOM0, {duration:0.8}); }, 50);
+  }, []);
+
   const flyToTrap = useCallback((t) => {
     const lat = parseFloat(t.lat), lng = parseFloat(t.lng);
     if (isNaN(lat)||isNaN(lng)) return;
@@ -953,10 +1053,8 @@ function App({session, onLogout}) {
               ＋ 罠を追加
             </button>
             <button onClick={onLogout} title={session.user.email}
-              style={{background:'rgba(255,255,255,0.12)', border:'1.5px solid rgba(255,255,255,0.22)', borderRadius:'0.75rem', color:'rgba(255,255,255,0.85)', fontSize:'0.72rem', fontWeight:700, padding:'6px 10px', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5}}>
-              <span style={{fontSize:'0.85rem'}}>👤</span>
-              <span className="desktop-addbtn" style={{display:'none'}}>ログアウト</span>
-              <span style={{fontSize:'0.6rem', opacity:0.7}}>⏏</span>
+              style={{background:'rgba(255,255,255,0.12)', border:'1.5px solid rgba(255,255,255,0.22)', borderRadius:'0.75rem', color:'rgba(255,255,255,0.85)', fontSize:'0.75rem', fontWeight:800, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5, whiteSpace:'nowrap'}}>
+              👤 ログアウト
             </button>
           </div>
         </div>
@@ -996,9 +1094,15 @@ function App({session, onLogout}) {
             )}
             {!picking && (
               <>
-                <button onClick={handleCache} disabled={caching} style={{position:'absolute', top:'1rem', left:'1rem', zIndex:400, background:'rgba(255,255,255,0.92)', color:'var(--forest-700)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', padding:'8px 14px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', opacity:caching ? 0.6 : 1, fontFamily:'inherit', transition:'opacity 0.2s'}}>
-                  {caching ? '⏳ 保存中…' : '📥 オフライン用に地図を保存'}
-                </button>
+                <div style={{position:'absolute', top:'1rem', left:'1rem', zIndex:400, display:'flex', gap:6}}>
+                  <button onClick={handleCache} disabled={caching} style={{background:'rgba(255,255,255,0.92)', color:'var(--forest-700)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', padding:'8px 14px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', opacity:caching ? 0.6 : 1, fontFamily:'inherit', transition:'opacity 0.2s', whiteSpace:'nowrap'}}>
+                    {caching ? '⏳ 保存中…' : '📥 オフライン用に地図を保存'}
+                  </button>
+                  <button onClick={() => setShowCacheModal(true)} title="キャッシュ情報"
+                    style={{width:'36px', height:'36px', background:'rgba(255,255,255,0.92)', color:'var(--forest-700)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1rem', cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', fontFamily:'inherit', flexShrink:0}}>
+                    📊
+                  </button>
+                </div>
                 <button onClick={handleLocate} disabled={locating} title="現在地へ移動"
                   style={{position:'absolute', top:'1rem', right:'1rem', zIndex:400, width:'44px', height:'44px', background:'white', color: locating ? 'var(--forest-300)' : 'var(--forest-600)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.25rem', cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', fontFamily:'inherit', transition:'opacity 0.2s'}}>
                   {locating ? '⏳' : '📍'}
@@ -1038,11 +1142,19 @@ function App({session, onLogout}) {
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-10l6-3m6 16l-4.553 2.276A1 1 0 0115 21.382V10.618a1 1 0 01.553-.894L21 7v13z"/></svg>
           地図
         </button>
+        <button className="nav-btn" onClick={flyToBase}>
+          <span style={{fontSize:'1.35rem', lineHeight:1}}>⛺</span>
+          ベース
+        </button>
         <button className={'nav-btn' + (mobileTab==='list' ? ' active' : '')} onClick={() => setMobTab('list')}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4"/></svg>
           一覧
         </button>
       </nav>
+
+      {showCacheModal && (
+        <CacheInfoModal onClose={() => setShowCacheModal(false)}/>
+      )}
 
       {toast && <div className="toast">{toast}</div>}
 
