@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -51,7 +52,7 @@ body{font-family:'Zen Maru Gothic','Hiragino Sans','YuGothic',sans-serif;backgro
   .sheet-body{padding:1.75rem}
 }
 
-/* FAB add button — wide pill above bottom nav, always on top */
+/* FAB add button */
 .fab-add{position:fixed;left:1rem;right:1rem;bottom:calc(4.75rem + env(safe-area-inset-bottom));z-index:310;height:3.25rem;border-radius:1.5rem;background:linear-gradient(135deg,var(--forest-500),var(--forest-800));color:white;border:none;box-shadow:var(--shadow-fab);display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;font-family:inherit;font-size:1rem;font-weight:900;letter-spacing:.02em;transition:transform .14s,box-shadow .14s}
 .fab-add:active{transform:scale(0.97)}
 
@@ -70,7 +71,7 @@ textarea.field-input{height:auto;padding:.875rem 1rem;resize:none;line-height:1.
 .pick-banner{position:absolute;top:.875rem;left:50%;transform:translateX(-50%);z-index:500;background:rgba(14,38,20,0.88);color:white;backdrop-filter:blur(8px);padding:.625rem 1.375rem;border-radius:9999px;font-size:.8rem;font-weight:700;letter-spacing:.03em;white-space:nowrap;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
 
 /* Toast */
-.toast{position:fixed;bottom:calc(5.5rem + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:300;background:var(--forest-800);color:white;padding:.75rem 1.5rem;border-radius:1rem;font-size:.82rem;font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,0.3);white-space:nowrap;animation:overlay-in .2s}
+.toast{position:fixed;bottom:calc(5.5rem + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:650;background:var(--forest-800);color:white;padding:.75rem 1.5rem;border-radius:1rem;font-size:.82rem;font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,0.3);white-space:nowrap;animation:overlay-in .2s}
 
 /* Status badge */
 .status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:800;border:1.5px solid;font-family:inherit}
@@ -101,7 +102,39 @@ textarea.field-input{height:auto;padding:.875rem 1rem;resize:none;line-height:1.
 <script type="text/babel" data-presets="react">
 const {useState, useEffect, useRef, useCallback} = React;
 
-const SK = 'yokose-v4';
+/* ── Supabase ──────────────────────────────────────────────── */
+const SUPABASE_URL = 'https://ykojblrieeirgbxxurwh.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_40xB7vnxMkqTSywczaIA7g_Xol4pHbs';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/*
+  Required Supabase SQL (run once in SQL Editor):
+
+  CREATE TABLE traps (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    trap_id      TEXT NOT NULL,
+    type         TEXT NOT NULL DEFAULT 'kukuri',
+    status       TEXT NOT NULL DEFAULT '稼働中',
+    installed_at TEXT,
+    lat          TEXT,
+    lng          TEXT,
+    notes        TEXT DEFAULT '',
+    sightings    JSONB NOT NULL DEFAULT '[]',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  ALTER TABLE traps ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "own traps" ON traps FOR ALL
+    USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+  CREATE TABLE allowed_emails (email TEXT PRIMARY KEY);
+  ALTER TABLE allowed_emails ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "check own email" ON allowed_emails FOR SELECT
+    USING (email = auth.email());
+*/
+
+/* ── Constants ─────────────────────────────────────────────── */
 const TILE_CACHE = 'gsi-v2';
 const CENTER = [35.9722871, 139.165769];
 const ZOOM0 = 15;
@@ -129,7 +162,20 @@ const ANIMALS = [
 ];
 const AMAP = Object.fromEntries(ANIMALS.map(a => [a.id, a]));
 
-const loadTraps = () => { try { return JSON.parse(localStorage.getItem(SK) || '[]'); } catch { return []; } };
+/* ── DB ↔ App conversion ───────────────────────────────────── */
+const dbToTrap = (row) => ({
+  id:          row.id,
+  trapId:      row.trap_id,
+  type:        row.type,
+  status:      row.status,
+  installedAt: row.installed_at || '',
+  lat:         row.lat  || '',
+  lng:         row.lng  || '',
+  notes:       row.notes || '',
+  sightings:   row.sightings || [],
+  createdAt:   row.created_at,
+  updatedAt:   row.updated_at,
+});
 
 const nextTrapId = (traps) => {
   const nums = traps.map(t => { const m = t.trapId.match(/^A-(\d+)$/); return m ? +m[1] : 0; });
@@ -147,6 +193,7 @@ const fmtDT = (s) => {
   return new Date(s).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
 };
 
+/* ── Offline tile cache ────────────────────────────────────── */
 const OFFLINE_SVG = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">' +
   '<rect fill="#d5cfbf" width="256" height="256"/>' +
@@ -214,6 +261,7 @@ const cacheViewport = async (bounds, zoom) => {
   return saved;
 };
 
+/* ── Map pin / popup ───────────────────────────────────────── */
 const makePin = (trap, selected) => {
   const tt = TRAP_TYPES[trap.type];
   const st = TRAP_STATUS[trap.status];
@@ -249,7 +297,7 @@ const makePopup = (t) => {
 
 const labelSt = {display:'block', fontSize:'0.8rem', fontWeight:800, color:'var(--forest-500)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8};
 
-// ── FilterBar ────────────────────────────────────────────────
+/* ── FilterBar ─────────────────────────────────────────────── */
 function FilterBar({query, setQuery, filterSt, setFSt, filterTy, setFTy, mobile}) {
   const h = mobile ? '2.875rem' : '2.125rem';
   const r = mobile ? '0.875rem' : '0.625rem';
@@ -271,7 +319,7 @@ function FilterBar({query, setQuery, filterSt, setFSt, filterTy, setFTy, mobile}
   );
 }
 
-// ── TrapCard ─────────────────────────────────────────────────
+/* ── TrapCard ──────────────────────────────────────────────── */
 function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDetail, desktop}) {
   const tt = TRAP_TYPES[t.type];
   const st = TRAP_STATUS[t.status];
@@ -320,9 +368,8 @@ function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDeta
               <p style={{fontSize:'0.87rem', color:'var(--forest-800)', lineHeight:1.7, margin:0, whiteSpace:'pre-wrap'}}>{t.notes}</p>
             </div>
           )}
-          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', marginTop:10}}>
             <span style={{fontSize:'0.68rem', color:'var(--forest-300)', fontWeight:600}}>更新 {fmtDT(t.updatedAt)}</span>
-            <button onClick={e => {e.stopPropagation(); onDel();}} style={{fontSize:'0.78rem', fontWeight:800, color:'#DC2626', background:'#FFF5F5', border:'1px solid #FCA5A5', borderRadius:'0.75rem', padding:'5px 12px', cursor:'pointer', fontFamily:'inherit'}}>🗑 削除</button>
           </div>
         </div>
       )}
@@ -330,7 +377,7 @@ function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDeta
   );
 }
 
-// ── TrapList ─────────────────────────────────────────────────
+/* ── TrapList ──────────────────────────────────────────────── */
 function TrapList({filtered, traps, openCardId, setOpenCardId, selId, onEdit, onDel, onFly, onDetail, desktop}) {
   if (!filtered.length) return (
     <div style={{textAlign:'center', padding:'4rem 1rem', color:'var(--forest-400)'}}>
@@ -355,7 +402,7 @@ function TrapList({filtered, traps, openCardId, setOpenCardId, selId, onEdit, on
   );
 }
 
-// ── DetailView ───────────────────────────────────────────────
+/* ── DetailView ────────────────────────────────────────────── */
 function DetailView({trap:t, onClose, onEdit, onDel, onAddSighting, onDelSighting, onFly}) {
   const tt = TRAP_TYPES[t.type];
   const st = TRAP_STATUS[t.status];
@@ -430,7 +477,7 @@ function DetailView({trap:t, onClose, onEdit, onDel, onAddSighting, onDelSightin
   );
 }
 
-// ── TrapForm ─────────────────────────────────────────────────
+/* ── TrapForm ──────────────────────────────────────────────── */
 function TrapForm({draft, setDraft, editId, gpsLoading, gpsError, onSave, onClose, onGPS, onPick}) {
   const set = (k, v) => setDraft({...draft, [k]:v});
   return (
@@ -514,7 +561,7 @@ function TrapForm({draft, setDraft, editId, gpsLoading, gpsError, onSave, onClos
   );
 }
 
-// ── SightingForm ─────────────────────────────────────────────
+/* ── SightingForm ───────────────────────────────────────────── */
 function SightingForm({draft, setDraft, onSave, onClose}) {
   const set = (k, v) => setDraft({...draft, [k]:v});
   return (
@@ -557,9 +604,60 @@ function SightingForm({draft, setDraft, onSave, onClose}) {
   );
 }
 
-// ── App ───────────────────────────────────────────────────────
-function App() {
-  const [traps, setTraps]       = useState(loadTraps);
+/* ── LoginScreen ────────────────────────────────────────────── */
+function LoginScreen({onLogin, error}) {
+  const [busy, setBusy] = useState(false);
+  const handleClick = async () => { setBusy(true); await onLogin(); setBusy(false); };
+  return (
+    <div style={{height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'linear-gradient(160deg,#0D2614 0%,#1E5430 55%,#2B7043 100%)', padding:'2rem', position:'relative', overflow:'hidden'}}>
+      {/* decorative tree backdrop */}
+      <div style={{position:'absolute', fontSize:'12rem', opacity:0.06, userSelect:'none', pointerEvents:'none', bottom:'-2rem', right:'-2rem', lineHeight:1}}>🌲</div>
+      <div style={{position:'absolute', fontSize:'8rem', opacity:0.05, userSelect:'none', pointerEvents:'none', top:'2rem', left:'-1rem', lineHeight:1}}>🌿</div>
+
+      <div style={{textAlign:'center', marginBottom:'2.5rem', position:'relative'}}>
+        <div style={{fontSize:'4.5rem', marginBottom:'0.75rem', filter:'drop-shadow(0 4px 16px rgba(0,0,0,0.4))'}}>🌲</div>
+        <h1 style={{color:'white', fontSize:'1.6rem', fontWeight:900, margin:0, letterSpacing:'0.02em', lineHeight:1.2}}>横瀬町 罠猟ノート</h1>
+        <p style={{color:'rgba(176,228,192,0.75)', fontSize:'0.82rem', fontWeight:700, marginTop:'0.5rem', letterSpacing:'0.05em'}}>YOKOSE TRAP FIELD NOTES</p>
+      </div>
+
+      <div style={{background:'white', borderRadius:'1.5rem', padding:'1.75rem', width:'100%', maxWidth:'22rem', boxShadow:'0 24px 64px rgba(0,0,0,0.45)', position:'relative'}}>
+        {error && (
+          <div style={{background:'#FFF5F5', border:'1.5px solid #FCA5A5', borderRadius:'0.875rem', padding:'12px 14px', marginBottom:'1.25rem', fontSize:'0.82rem', color:'#DC2626', fontWeight:700, lineHeight:1.6}}>
+            ⚠️ {error}
+          </div>
+        )}
+        <button onClick={handleClick} disabled={busy}
+          style={{width:'100%', height:'3.25rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', background:'white', color:'var(--forest-900)', fontSize:'1rem', fontWeight:800, cursor:busy ? 'not-allowed' : 'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:12, boxShadow:'var(--shadow-card)', transition:'all 0.2s', opacity:busy ? 0.6 : 1}}>
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          {busy ? '認証中…' : 'Googleでログイン'}
+        </button>
+        <p style={{fontSize:'0.72rem', color:'var(--forest-400)', textAlign:'center', marginTop:'1rem', lineHeight:1.7, fontWeight:600}}>
+          招待制アプリです。<br/>許可されたGoogleアカウントのみアクセスできます。
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ── LoadingScreen ──────────────────────────────────────────── */
+function LoadingScreen() {
+  return (
+    <div style={{height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:'linear-gradient(160deg,#0D2614 0%,#1E5430 55%,#2B7043 100%)'}}>
+      <div style={{fontSize:'3.5rem', marginBottom:'1rem', animation:'pulse 1.6s ease-in-out infinite'}}>🌲</div>
+      <div style={{color:'rgba(176,228,192,0.85)', fontWeight:700, fontSize:'0.88rem', letterSpacing:'0.05em'}}>読み込み中…</div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.92)}}`}</style>
+    </div>
+  );
+}
+
+/* ── App ────────────────────────────────────────────────────── */
+function App({session, onLogout}) {
+  const [traps, setTraps]       = useState([]);
   const [mobileTab, setMobTab]  = useState('map');
   const [filterSt, setFSt]      = useState('すべて');
   const [filterTy, setFTy]      = useState('すべて');
@@ -589,7 +687,15 @@ function App() {
   const locCircRef= useRef(null);
   const locFlyDone= useRef(false);
 
-  useEffect(() => localStorage.setItem(SK, JSON.stringify(traps)), [traps]);
+  // Load traps from Supabase on mount
+  useEffect(() => {
+    supabase.from('traps').select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', {ascending:false})
+      .then(({data, error}) => {
+        if (!error && data) setTraps(data.map(dbToTrap));
+      });
+  }, []);
 
   useEffect(() => {
     const on = () => setOffline(false), off = () => setOffline(true);
@@ -625,7 +731,6 @@ function App() {
     map.on('locationfound', e => {
       setLocating(false);
       const {latlng, accuracy} = e;
-      // Update blue dot
       if (locDotRef.current) { locDotRef.current.setLatLng(latlng); } else {
         locDotRef.current = L.circleMarker(latlng, {radius:8, fillColor:'#4285F4', fillOpacity:1, color:'white', weight:2.5, zIndexOffset:900}).addTo(map);
       }
@@ -697,39 +802,63 @@ function App() {
     setGpsErr(''); setSF(true);
   }, []);
 
-  const saveTrap = useCallback(() => {
+  const saveTrap = useCallback(async () => {
     if (!draft || !draft.trapId.trim()) return;
     const now = new Date().toISOString();
+    const uid = session.user.id;
     if (editTrapId) {
-      setTraps(p => p.map(t => t.id===editTrapId ? {...t, ...draft, updatedAt:now} : t));
+      const {error} = await supabase.from('traps').update({
+        trap_id:draft.trapId, type:draft.type, status:draft.status,
+        installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
+        notes:draft.notes||'', updated_at:now
+      }).eq('id', editTrapId).eq('user_id', uid);
+      if (!error) setTraps(p => p.map(t => t.id===editTrapId ? {...t, ...draft, updatedAt:now} : t));
     } else {
-      setTraps(p => [{...draft, id:crypto.randomUUID(), sightings:[], createdAt:now, updatedAt:now}, ...p]);
+      const {data, error} = await supabase.from('traps').insert({
+        trap_id:draft.trapId, type:draft.type, status:draft.status,
+        installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
+        notes:draft.notes||'', sightings:[], user_id:uid, created_at:now, updated_at:now
+      }).select().single();
+      if (!error && data) setTraps(p => [dbToTrap(data), ...p]);
     }
     setSF(false); setDraft(null);
-  }, [draft, editTrapId]);
+  }, [draft, editTrapId, session]);
 
-  const deleteTrap = useCallback((id) => {
-    setTraps(p => p.filter(t => t.id!==id));
-    setDelId(null);
-    if (detailId===id) setDetailId(null);
-    if (selId===id) setSelId(null);
-  }, [detailId, selId]);
+  const deleteTrap = useCallback(async (id) => {
+    const {error} = await supabase.from('traps').delete().eq('id', id).eq('user_id', session.user.id);
+    if (!error) {
+      setTraps(p => p.filter(t => t.id!==id));
+      setDelId(null);
+      if (detailId===id) setDetailId(null);
+      if (selId===id) setSelId(null);
+    }
+  }, [detailId, selId, session]);
 
   const openNewSighting = useCallback(() => {
     setSDraft({timestamp:new Date().toISOString().slice(0,16), animal:'shika', notes:''});
     setSSF(true);
   }, []);
 
-  const saveSighting = useCallback(() => {
+  const saveSighting = useCallback(async () => {
     if (!sDraft || !detailId) return;
     const sighting = {id:crypto.randomUUID(), ...sDraft};
-    setTraps(p => p.map(t => t.id===detailId ? {...t, sightings:[...t.sightings, sighting], updatedAt:new Date().toISOString()} : t));
+    const trap = traps.find(t => t.id===detailId);
+    if (!trap) return;
+    const newSightings = [...trap.sightings, sighting];
+    const now = new Date().toISOString();
+    const {error} = await supabase.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', detailId).eq('user_id', session.user.id);
+    if (!error) setTraps(p => p.map(t => t.id===detailId ? {...t, sightings:newSightings, updatedAt:now} : t));
     setSSF(false); setSDraft(null);
-  }, [sDraft, detailId]);
+  }, [sDraft, detailId, traps, session]);
 
-  const deleteSighting = useCallback((trapId, sightingId) => {
-    setTraps(p => p.map(t => t.id===trapId ? {...t, sightings:t.sightings.filter(s=>s.id!==sightingId), updatedAt:new Date().toISOString()} : t));
-  }, []);
+  const deleteSighting = useCallback(async (trapId, sightingId) => {
+    const trap = traps.find(t => t.id===trapId);
+    if (!trap) return;
+    const newSightings = trap.sightings.filter(s => s.id!==sightingId);
+    const now = new Date().toISOString();
+    const {error} = await supabase.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', trapId).eq('user_id', session.user.id);
+    if (!error) setTraps(p => p.map(t => t.id===trapId ? {...t, sightings:newSightings, updatedAt:now} : t));
+  }, [traps, session]);
 
   const getGPS = useCallback(() => {
     if (!navigator.geolocation) { setGpsErr('GPSに対応していません'); return; }
@@ -790,10 +919,18 @@ function App() {
             <span style={{color:'#94A3B8'}}>⚫ {counts['撤去済み']}</span>
           </div>
         </div>
-        <button onClick={openNewTrap} className="desktop-addbtn"
-          style={{display:'none', alignItems:'center', gap:8, background:'rgba(255,255,255,0.14)', border:'1.5px solid rgba(255,255,255,0.28)', borderRadius:'var(--radius-btn)', color:'white', fontSize:'0.875rem', fontWeight:800, padding:'8px 14px', cursor:'pointer', fontFamily:'inherit'}}>
-          ＋ 罠を追加
-        </button>
+        <div style={{display:'flex', alignItems:'center', gap:8}}>
+          <button onClick={openNewTrap} className="desktop-addbtn"
+            style={{display:'none', alignItems:'center', gap:8, background:'rgba(255,255,255,0.14)', border:'1.5px solid rgba(255,255,255,0.28)', borderRadius:'var(--radius-btn)', color:'white', fontSize:'0.875rem', fontWeight:800, padding:'8px 14px', cursor:'pointer', fontFamily:'inherit'}}>
+            ＋ 罠を追加
+          </button>
+          <button onClick={onLogout} title={session.user.email}
+            style={{background:'rgba(255,255,255,0.12)', border:'1.5px solid rgba(255,255,255,0.22)', borderRadius:'0.75rem', color:'rgba(255,255,255,0.85)', fontSize:'0.72rem', fontWeight:700, padding:'6px 10px', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5}}>
+            <span style={{fontSize:'0.85rem'}}>👤</span>
+            <span className="desktop-addbtn" style={{display:'none'}}>ログアウト</span>
+            <span style={{fontSize:'0.6rem', opacity:0.7}}>⏏</span>
+          </button>
+        </div>
       </header>
 
       <div style={{flex:1, display:'flex', overflow:'hidden', position:'relative'}}>
@@ -898,7 +1035,56 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+/* ── Root (auth gate) ───────────────────────────────────────── */
+function Root() {
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authSession, setAuthSession] = useState(null);
+  const [authError, setAuthError]     = useState('');
+
+  useEffect(() => {
+    const checkAllowed = async (sess) => {
+      if (!sess) { setAuthLoading(false); setAuthSession(null); return; }
+      const {data} = await supabase.from('allowed_emails').select('email').eq('email', sess.user.email).maybeSingle();
+      if (!data) {
+        await supabase.auth.signOut();
+        setAuthError('このアカウントはアクセスが許可されていません。管理者に連絡してください。');
+        setAuthLoading(false);
+        setAuthSession(null);
+      } else {
+        setAuthError('');
+        setAuthSession(sess);
+        setAuthLoading(false);
+      }
+    };
+
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((event, sess) => {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        checkAllowed(sess);
+      } else if (event === 'SIGNED_OUT') {
+        setAuthSession(null);
+        setAuthLoading(false);
+      } else if (event === 'TOKEN_REFRESHED' && sess) {
+        setAuthSession(sess);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogin = useCallback(async () => {
+    const url = window.location.href.split('?')[0].split('#')[0];
+    await supabase.auth.signInWithOAuth({provider:'google', options:{redirectTo:url}});
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
+
+  if (authLoading) return React.createElement(LoadingScreen);
+  if (!authSession) return React.createElement(LoginScreen, {onLogin:handleLogin, error:authError});
+  return React.createElement(App, {session:authSession, onLogout:handleLogout});
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Root));
 </script>
 </body>
 </html>
