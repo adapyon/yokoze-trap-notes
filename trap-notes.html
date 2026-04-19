@@ -67,8 +67,8 @@ body{font-family:'Zen Maru Gothic','Hiragino Sans','YuGothic',sans-serif;backgro
 textarea.field-input{height:auto;padding:.875rem 1rem;resize:none;line-height:1.7}
 
 /* Pick mode */
-.pick-mode .leaflet-container{cursor:crosshair!important}
-.pick-banner{position:absolute;top:.875rem;left:50%;transform:translateX(-50%);z-index:500;background:rgba(14,38,20,0.88);color:white;backdrop-filter:blur(8px);padding:.625rem 1.375rem;border-radius:9999px;font-size:.8rem;font-weight:700;letter-spacing:.03em;white-space:nowrap;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
+.pick-crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:500;pointer-events:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.45))}
+.pick-actions{position:absolute;bottom:5.5rem;left:50%;transform:translateX(-50%);z-index:500;display:flex;gap:10px;white-space:nowrap}
 
 /* Toast */
 .toast{position:fixed;bottom:calc(5.5rem + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:650;background:var(--forest-800);color:white;padding:.75rem 1.5rem;border-radius:1rem;font-size:.82rem;font-weight:700;box-shadow:0 6px 24px rgba(0,0,0,0.3);white-space:nowrap;animation:overlay-in .2s}
@@ -778,7 +778,6 @@ function App({session, onLogout}) {
   const mapDiv    = useRef(null);
   const mapRef    = useRef(null);
   const markers   = useRef({});
-  const pickRef   = useRef(false);
   const locDotRef    = useRef(null);
   const locCircRef   = useRef(null);
   const locFlyDone   = useRef(false);
@@ -823,14 +822,6 @@ function App({session, onLogout}) {
     L.marker([35.9984949, 139.1007908], {icon:jibieiIcon, zIndexOffset:999}).addTo(map)
       .bindPopup('<div style="font-family:\'Zen Maru Gothic\',sans-serif;font-size:14px;font-weight:900;color:#0D2614;padding:2px 0">🍽️ 横瀬ジビエ製造場</div>');
 
-    map.on('click', e => {
-      if (!pickRef.current) return;
-      setDraft(d => d ? {...d, lat:e.latlng.lat.toFixed(6), lng:e.latlng.lng.toFixed(6)} : d);
-      pickRef.current = false;
-      setPicking(false);
-      setSF(true);
-    });
-
     map.on('locationfound', e => {
       setLocating(false);
       const {latlng, accuracy} = e;
@@ -855,7 +846,6 @@ function App({session, onLogout}) {
     return () => { map.stopLocate(); map.remove(); mapRef.current = null; };
   }, []);
 
-  useEffect(() => { pickRef.current = picking; }, [picking]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -980,6 +970,13 @@ function App({session, onLogout}) {
   }, []);
 
   const startPick = useCallback(() => { setSF(false); setPicking(true); setMobTab('map'); }, []);
+  const confirmPick = useCallback(() => {
+    if (!mapRef.current) return;
+    const c = mapRef.current.getCenter();
+    setDraft(d => d ? {...d, lat:c.lat.toFixed(6), lng:c.lng.toFixed(6)} : d);
+    setPicking(false);
+    setSF(true);
+  }, []);
 
   const flyToBase = useCallback(() => {
     setMobTab('map');
@@ -1076,8 +1073,21 @@ function App({session, onLogout}) {
             <div ref={mapDiv} style={{width:'100%', height:'100%'}}/>
             {picking && (
               <>
-                <div className="pick-banner">📍 罠の位置をタップして設定</div>
-                <button onClick={() => { setPicking(false); setSF(true); }} style={{position:'absolute', top:'3.5rem', left:'50%', transform:'translateX(-50%)', zIndex:500, background:'white', color:'var(--forest-700)', border:'2px solid var(--forest-300)', borderRadius:'9999px', padding:'8px 20px', fontSize:'0.8rem', fontWeight:800, cursor:'pointer', boxShadow:'0 4px 16px rgba(0,0,0,0.18)', fontFamily:'inherit'}}>← キャンセル</button>
+                {/* Crosshair pin fixed at center */}
+                <div className="pick-crosshair">
+                  <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="24" cy="24" r="6" fill="#DC2626" stroke="white" strokeWidth="2.5"/>
+                    <line x1="24" y1="2" x2="24" y2="16" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round"/>
+                    <line x1="24" y1="32" x2="24" y2="46" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round"/>
+                    <line x1="2" y1="24" x2="16" y2="24" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round"/>
+                    <line x1="32" y1="24" x2="46" y2="24" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round"/>
+                  </svg>
+                </div>
+                {/* Confirm / Cancel buttons */}
+                <div className="pick-actions">
+                  <button onClick={() => { setPicking(false); setSF(true); }} style={{height:'2.75rem', padding:'0 18px', borderRadius:'9999px', border:'2px solid rgba(255,255,255,0.7)', background:'rgba(30,40,30,0.75)', color:'white', fontSize:'0.85rem', fontWeight:800, cursor:'pointer', backdropFilter:'blur(6px)', fontFamily:'inherit', boxShadow:'0 4px 16px rgba(0,0,0,0.3)'}}>← キャンセル</button>
+                  <button onClick={confirmPick} style={{height:'2.75rem', padding:'0 22px', borderRadius:'9999px', border:'none', background:'#DC2626', color:'white', fontSize:'0.85rem', fontWeight:900, cursor:'pointer', fontFamily:'inherit', boxShadow:'0 4px 16px rgba(220,38,38,0.5)'}}>📍 この場所に設定</button>
+                </div>
               </>
             )}
             {!picking && (
