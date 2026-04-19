@@ -99,9 +99,23 @@ main{padding:0 16px 60px}
 .steps li:last-child{border-bottom:none}
 .step-num{
   background:var(--forest-600);color:white;border-radius:50%;
-  width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  min-width:28px;height:28px;display:flex;align-items:center;justify-content:center;
   font-size:0.8rem;font-weight:900;flex-shrink:0;margin-top:2px;
 }
+.step-num.emoji{background:transparent;font-size:1.3rem;width:32px;height:32px}
+
+/* ── Type / Status cards ── */
+.card-grid{display:flex;flex-direction:column;gap:12px;margin:16px 0}
+.info-card{
+  border:1.5px solid var(--forest-200);border-radius:1rem;
+  background:var(--forest-50);padding:16px 18px;
+  display:flex;align-items:flex-start;gap:14px;
+}
+.info-card .card-icon{font-size:2rem;flex-shrink:0;margin-top:2px}
+.info-card .card-body{}
+.info-card .card-title{font-size:1rem;font-weight:900;color:var(--forest-800);margin-bottom:4px}
+.info-card .card-desc{font-size:0.92rem;color:var(--forest-700);line-height:1.7}
+.status-dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:6px;vertical-align:middle}
 
 /* ── Tips / Notes ── */
 .tip{
@@ -125,14 +139,14 @@ main{padding:0 16px 60px}
   font-weight:900;font-size:0.97rem;color:var(--forest-800);
   display:flex;align-items:flex-start;gap:10px;
 }
-.faq-q::before{content:'Q';background:var(--forest-600);color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;flex-shrink:0;margin-top:1px}
+.faq-q-icon{background:var(--forest-600);color:white;border-radius:50%;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;flex-shrink:0;margin-top:1px}
 .faq-a{
   background:white;border:1.5px solid var(--forest-200);border-top:none;
   border-radius:0 0 0.875rem 0.875rem;padding:14px 18px;
   font-size:0.95rem;color:var(--forest-800);line-height:1.8;
   display:flex;align-items:flex-start;gap:10px;
 }
-.faq-a::before{content:'A';background:var(--amber-500);color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;flex-shrink:0;margin-top:1px}
+.faq-a-icon{background:var(--amber-500);color:white;border-radius:50%;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;flex-shrink:0;margin-top:1px}
 
 /* ── Badge ── */
 .badge{
@@ -154,22 +168,22 @@ footer{
 </head>
 <body>
 
-<!-- ヘッダー -->
 <header class="site-header">
   <h1>🌲 横瀬町 罠猟ノート</h1>
   <div class="sub">使い方マニュアル</div>
   <a class="app-link" href="trap-notes.html">📱 アプリを開く →</a>
 </header>
 
-<!-- 目次 -->
 <nav class="toc" aria-label="目次">
   <h2>📋 目次</h2>
   <ol>
     <li><a href="#intro">はじめに</a></li>
     <li><a href="#login">ログイン方法</a></li>
-    <li><a href="#map">地図画面の見方</a></li>
-    <li><a href="#add">罠を追加する</a></li>
-    <li><a href="#list">一覧・編集・削除</a></li>
+    <li><a href="#map">地図画面の見方・各ボタン説明</a></li>
+    <li><a href="#types">罠の種類</a></li>
+    <li><a href="#status">罠の状態</a></li>
+    <li><a href="#add">罠を追加する方法</a></li>
+    <li><a href="#list">罠の一覧・編集・削除</a></li>
     <li><a href="#offline">オフライン用に地図を保存する</a></li>
     <li><a href="#faq">よくある質問</a></li>
   </ol>
@@ -186,7 +200,7 @@ footer{
   <div class="section-body">
     <p>
       <strong>横瀬町 罠猟ノート</strong>は、罠の設置場所・状態・目撃記録をスマホで管理するアプリです。
-      国土地理院の地図にピン🪤を立てて、どこに何の罠があるかを一目で確認できます。
+      国土地理院の地図にピンを立てて、どこに何の罠があるかを一目で確認できます。
     </p>
     <p>
       データはインターネット上（Supabase）に保存されるので、複数の人が同じ情報を共有できます。
@@ -225,79 +239,167 @@ footer{
 <section class="section" id="map">
   <div class="section-header">
     <div class="section-num">3</div>
-    <div class="section-title">地図画面の見方</div>
+    <div class="section-title">地図画面の見方・各ボタン説明</div>
   </div>
   <div class="section-body">
     <div class="screenshot-wrap">
       <img src="screenshot2.webp" alt="地図画面" onerror="this.parentElement.classList.add('placeholder');this.style.display='none';this.parentElement.innerHTML+='🖼️ screenshot2.webp'"/>
       <p class="img-caption">▲ 地図画面</p>
     </div>
-    <p>地図上には以下のアイコンが表示されます：</p>
+
+    <p><strong>地図上のアイコン</strong></p>
     <ul class="steps">
-      <li><div class="step-num">⛺</div><span><strong>ベース：カリラボ</strong> — 活動の拠点</span></li>
-      <li><div class="step-num">🍽️</div><span><strong>横瀬ジビエ製造場</strong> — 搬入先</span></li>
-      <li><div class="step-num">🪤</div><span><strong>くくり罠</strong> <span class="badge">稼働中</span> — 緑の円</span></li>
-      <li><div class="step-num">📦</div><span><strong>はこ罠</strong> <span class="badge yellow">要確認</span> — 黄色の円</span></li>
-      <li><div class="step-num">❓</div><span><strong>その他の罠</strong> <span class="badge gray">撤去済み</span> — グレーの円</span></li>
+      <li><div class="step-num emoji">⛺</div><span><strong>ベース：カリラボ</strong> — 活動拠点</span></li>
+      <li><div class="step-num emoji">🍽️</div><span><strong>横瀬ジビエ製造場</strong> — 搬入先</span></li>
+      <li><div class="step-num emoji">🪤</div><span><strong>くくり罠</strong></span></li>
+      <li><div class="step-num emoji">📦</div><span><strong>はこ罠</strong></span></li>
+      <li><div class="step-num emoji">❓</div><span><strong>その他の罠</strong></span></li>
     </ul>
-    <p>ピンをタップするとポップアップが開き、設置日や目撃情報を確認できます。</p>
-    <p>
-      画面上部のボタン：<br>
-      <strong>📥 オフライン用に地図を保存</strong> — 現在表示している範囲をダウンロード<br>
-      <strong>📍</strong> — 現在地へ移動（青い点が地図上に表示されます）
-    </p>
-    <p>
-      ヘッダーのボタン：<br>
-      <strong>📋 一覧</strong> — 罠の一覧に切り替え<br>
-      <strong>＋ 追加</strong> — 新しい罠を登録<br>
-      <strong>📍 現在地</strong> — 地図を現在地に移動<br>
-      <strong>⛺ ベース</strong> — カリラボに地図を戻す
-    </p>
-    <div class="tip">
-      地図を長押し（約0.6秒）すると、その場所の座標が入力済みの「罠の追加フォーム」が開きます。
+    <p>ピンをタップするとポップアップが開き、設置日や状態を確認できます。</p>
+
+    <p><strong>ヘッダーのボタン（画面上部）</strong></p>
+    <ul class="steps">
+      <li><div class="step-num emoji">📋</div><span><strong>一覧</strong> — 登録した罠の一覧に切り替えます</span></li>
+      <li><div class="step-num emoji">＋</div><span><strong>追加</strong> — 新しい罠を登録するフォームを開きます</span></li>
+      <li><div class="step-num emoji">📍</div><span><strong>現在地</strong> — 地図を今いる場所に移動します（青い点が表示されます）</span></li>
+      <li><div class="step-num emoji">⛺</div><span><strong>ベース</strong> — カリラボ（活動拠点）に地図を戻します</span></li>
+    </ul>
+
+    <p><strong>地図左上のボタン</strong></p>
+    <ul class="steps">
+      <li><div class="step-num emoji">📥</div><span><strong>オフライン用に地図を保存</strong> — 現在表示しているエリアの地図をダウンロードします</span></li>
+      <li><div class="step-num emoji">📊</div><span><strong>キャッシュ情報</strong> — 保存済みタイル数・容量の確認とクリアができます</span></li>
+    </ul>
+
+    <p><strong>下部ナビ（画面下部）</strong></p>
+    <ul class="steps">
+      <li><div class="step-num emoji">🗺</div><span><strong>地図</strong> — 地図画面に切り替えます</span></li>
+      <li><div class="step-num emoji">📋</div><span><strong>一覧</strong> — 罠の一覧画面に切り替えます</span></li>
+      <li><div class="step-num emoji">📖</div><span><strong>マニュアル</strong> — このマニュアルを開きます</span></li>
+    </ul>
+
+    <p><strong>右上のボタン</strong></p>
+    <ul class="steps">
+      <li><div class="step-num emoji">👤</div><span><strong>ログアウト</strong> — アプリからログアウトします</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 4. 罠の種類 -->
+<section class="section" id="types">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <div class="section-title">罠の種類</div>
+  </div>
+  <div class="section-body">
+    <p>罠を登録するとき、以下の3種類から選びます。</p>
+    <div class="card-grid">
+      <div class="info-card">
+        <div class="card-icon">🪤</div>
+        <div class="card-body">
+          <div class="card-title">くくり罠</div>
+          <div class="card-desc">獣道や通り道に仕掛け、動物の足をくくって捕らえる罠です。シカやイノシシの捕獲に多く使われます。地図上では 🪤 アイコンで表示されます。</div>
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="card-icon">📦</div>
+        <div class="card-body">
+          <div class="card-title">はこ罠</div>
+          <div class="card-desc">箱型のケージに動物を誘い込んで捕獲する罠です。餌を使って引き寄せます。アライグマやタヌキの捕獲にも有効です。地図上では 📦 アイコンで表示されます。</div>
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="card-icon">❓</div>
+        <div class="card-body">
+          <div class="card-title">その他</div>
+          <div class="card-desc">くくり罠・はこ罠以外の罠（囲い罠など）はこちらを選んでください。地図上では ❓ アイコンで表示されます。</div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- 4. 罠を追加 -->
+<!-- 5. 罠の状態 -->
+<section class="section" id="status">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <div class="section-title">罠の状態</div>
+  </div>
+  <div class="section-body">
+    <p>罠には現在の状態を設定できます。地図上のピンの周りに色のついた円が表示されます。</p>
+    <div class="card-grid">
+      <div class="info-card">
+        <div class="card-icon">🟢</div>
+        <div class="card-body">
+          <div class="card-title">稼働中</div>
+          <div class="card-desc">
+            <span class="status-dot" style="background:#22C55E"></span>緑色の円で表示されます。<br>
+            罠が正常に設置されており、今すぐ使える状態です。通常はこの状態にしておきます。
+          </div>
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="card-icon">🟡</div>
+        <div class="card-body">
+          <div class="card-title">要確認</div>
+          <div class="card-desc">
+            <span class="status-dot" style="background:#EAB308"></span>黄色の円で表示されます。<br>
+            かかっている可能性がある、または点検が必要な状態です。早めに現地を確認してください。
+          </div>
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="card-icon">⚫</div>
+        <div class="card-body">
+          <div class="card-title">撤去済み</div>
+          <div class="card-desc">
+            <span class="status-dot" style="background:#9CA3AF"></span>グレーの円で表示されます。<br>
+            罠を撤去した状態です。記録として残しておくため、削除せずに「撤去済み」に変更しておきましょう。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. 罠を追加 -->
 <section class="section" id="add">
   <div class="section-header">
-    <div class="section-num">4</div>
-    <div class="section-title">罠を追加する</div>
+    <div class="section-num">6</div>
+    <div class="section-title">罠を追加する方法</div>
   </div>
   <div class="section-body">
     <div class="screenshot-wrap">
       <img src="screenshot3.webp" alt="罠の追加フォーム" onerror="this.parentElement.classList.add('placeholder');this.style.display='none';this.parentElement.innerHTML+='🖼️ screenshot3.webp'"/>
       <p class="img-caption">▲ 罠の追加フォーム</p>
     </div>
+    <p>ヘッダーの <strong>＋ 追加</strong> ボタンをタップすると、罠の登録フォームが開きます。</p>
     <ol class="steps">
-      <li><div class="step-num">1</div><span>画面下部の <strong>＋ 罠を追加</strong> ボタンをタップします。<br>または地図を<strong>長押し</strong>すると、その地点の座標が自動で入力されます。</span></li>
-      <li><div class="step-num">2</div><span><strong>認識番号</strong>（例：A-001）を確認・入力します。自動で次の番号が入ります。</span></li>
-      <li><div class="step-num">3</div><span><strong>罠の種類</strong>（くくり罠 / はこ罠 / その他）を選びます。</span></li>
-      <li><div class="step-num">4</div><span><strong>状態</strong>（稼働中 / 要確認 / 撤去済み）を選びます。</span></li>
-      <li><div class="step-num">5</div><span><strong>設置日</strong>を入力します。</span></li>
-      <li><div class="step-num">6</div><span>
-        <strong>GPS座標</strong>を入力します。方法は3つ：
+      <li><div class="step-num">1</div><span><strong>認識番号</strong>（例：A-001）を確認します。自動で次の番号が入力されています。</span></li>
+      <li><div class="step-num">2</div><span><strong>罠の種類</strong>（くくり罠 / はこ罠 / その他）を選びます。</span></li>
+      <li><div class="step-num">3</div><span><strong>状態</strong>（稼働中 / 要確認 / 撤去済み）を選びます。新しく設置する場合は「稼働中」を選びます。</span></li>
+      <li><div class="step-num">4</div><span><strong>設置日</strong>を入力します。</span></li>
+      <li><div class="step-num">5</div><span>
+        <strong>GPS座標</strong>を入力します。方法は2つ：
         <ul style="margin-top:6px;padding-left:1.2em;line-height:2">
-          <li>📍 <strong>現在地</strong>ボタン → 今いる場所の座標を自動取得</li>
-          <li>🗺 <strong>地図で指定</strong>ボタン → 地図をタップして指定</li>
-          <li>地図を<strong>長押し</strong>して開いた場合は自動入力済み</li>
+          <li>📍 <strong>現在地</strong>ボタン → 今いる場所の座標を自動で取得します</li>
+          <li>🗺 <strong>地図で指定</strong>ボタン → 地図をタップして場所を指定します</li>
         </ul>
       </span></li>
-      <li><div class="step-num">7</div><span>必要があれば<strong>メモ</strong>（設置場所の特徴、餌の種類など）を入力します。</span></li>
-      <li><div class="step-num">8</div><span><strong>保存する</strong>ボタンをタップして完了です。</span></li>
+      <li><div class="step-num">6</div><span>必要があれば<strong>メモ</strong>（設置場所の特徴、餌の種類など）を入力します。</span></li>
+      <li><div class="step-num">7</div><span><strong>保存する</strong>ボタンをタップして完了です。地図にピンが追加されます。</span></li>
     </ol>
     <div class="tip">
-      電波が届かない場所では「GPS取得失敗」になることがあります。その場合は地図で指定するか、後から座標を入力してください。
+      電波が届かない場所では「GPS取得失敗」になることがあります。その場合は「地図で指定」ボタンを使って地図上で場所を指定してください。
     </div>
   </div>
 </section>
 
-<!-- 5. 一覧・編集・削除 -->
+<!-- 7. 一覧・編集・削除 -->
 <section class="section" id="list">
   <div class="section-header">
-    <div class="section-num">5</div>
-    <div class="section-title">罠の一覧を見る・編集・削除</div>
+    <div class="section-num">7</div>
+    <div class="section-title">罠の一覧・編集・削除</div>
   </div>
   <div class="section-body">
     <div class="screenshot-wrap">
@@ -308,8 +410,8 @@ footer{
 
     <p><strong>🔍 検索・絞り込み</strong></p>
     <ul class="steps">
-      <li><div class="step-num">🔍</div><span>テキスト欄に認識番号やメモを入力して検索できます。</span></li>
-      <li><div class="step-num">▼</div><span>「状態」「種類」のプルダウンで絞り込みができます。</span></li>
+      <li><div class="step-num emoji">🔍</div><span>テキスト欄に認識番号やメモを入力して検索できます。</span></li>
+      <li><div class="step-num emoji">▼</div><span>「状態」「種類」のプルダウンで絞り込みができます。</span></li>
     </ul>
 
     <p style="margin-top:16px"><strong>✏️ 編集する</strong></p>
@@ -321,93 +423,94 @@ footer{
     <p style="margin-top:16px"><strong>🗑 削除する</strong></p>
     <ol class="steps">
       <li><div class="step-num">1</div><span>削除したい罠のカードにある <span class="badge red">削除</span> ボタンをタップします。</span></li>
-      <li><div class="step-num">2</div><span>確認ダイアログが表示されるので「削除する」をタップします。</span></li>
+      <li><div class="step-num">2</div><span>確認メッセージが表示されるので「削除する」をタップします。</span></li>
     </ol>
 
-    <p style="margin-top:16px"><strong>📷 トレイルカメラ記録を追加する</strong></p>
+    <p style="margin-top:16px"><strong>📷 目撃・捕獲記録を追加する</strong></p>
     <ol class="steps">
       <li><div class="step-num">1</div><span>罠のカードの <strong>詳細</strong> ボタンをタップします。</span></li>
       <li><div class="step-num">2</div><span>詳細画面で「＋ 記録追加」をタップします。</span></li>
       <li><div class="step-num">3</div><span>動物の種類・日時・メモを入力して「記録する」をタップします。</span></li>
     </ol>
     <div class="note">
-      削除した罠・記録は元に戻せません。ご注意ください。
+      削除した罠・記録は元に戻せません。撤去した罠は削除せず「撤去済み」に状態変更しておくことをお勧めします。
     </div>
   </div>
 </section>
 
-<!-- 6. オフライン -->
+<!-- 8. オフライン -->
 <section class="section" id="offline">
   <div class="section-header">
-    <div class="section-num">6</div>
+    <div class="section-num">8</div>
     <div class="section-title">オフライン用に地図を保存する</div>
   </div>
   <div class="section-body">
     <div class="screenshot-wrap">
       <img src="screenshot5.webp" alt="オフライン保存" onerror="this.parentElement.classList.add('placeholder');this.style.display='none';this.parentElement.innerHTML+='🖼️ screenshot5.webp'"/>
-      <p class="img-caption">▲ オフライン保存ボタン</p>
+      <p class="img-caption">▲ オフライン保存ボタン（地図左上）</p>
     </div>
     <p>
       山の中では電波が届かず地図が表示されないことがあります。
-      あらかじめ地図を保存しておくと、オフラインでも地図が見られます。
+      あらかじめ地図を保存しておくと、電波がない場所でも地図を見られます。
     </p>
     <ol class="steps">
-      <li><div class="step-num">1</div><span>地図タブを開き、保存したいエリアが画面に収まるようにズームします。</span></li>
-      <li><div class="step-num">2</div><span>画面左上の <strong>📥 オフライン用に地図を保存</strong> ボタンをタップします。</span></li>
-      <li><div class="step-num">3</div><span>「✅ ○○タイル保存！オフライン利用可能」と表示されたら完了です。</span></li>
+      <li><div class="step-num">1</div><span>Wi-Fiや電波が届く場所でアプリを開きます。</span></li>
+      <li><div class="step-num">2</div><span>地図タブを開き、保存したいエリアが画面に収まるようにズームします。</span></li>
+      <li><div class="step-num">3</div><span>画面左上の <strong>📥 オフライン用に地図を保存</strong> ボタンをタップします。</span></li>
+      <li><div class="step-num">4</div><span>「✅ ○○タイル保存！オフライン利用可能」と表示されたら保存完了です。</span></li>
     </ol>
     <div class="tip">
-      保存できるタイル数には上限があります。広いエリアを一度に保存しようとすると「エリア大きすぎ」と表示されます。その場合はズームインして範囲を絞ってください。
+      広いエリアを一度に保存しようとすると「エリア大きすぎ」と表示されます。その場合はズームインして保存する範囲を絞ってください。
     </div>
     <p><strong>📊 保存状況の確認・クリア</strong></p>
     <p>
-      保存ボタンの右隣の <strong>📊</strong> ボタンをタップすると、保存済みのタイル数・容量が確認できます。
-      容量を空けたいときはここから「🗑 キャッシュをクリア」できます。
+      保存ボタンの右隣の <strong>📊</strong> ボタンをタップすると、保存済みのタイル数・容量を確認できます。
+      スマホの容量を空けたいときはここから「🗑 キャッシュをクリア」してください。
     </p>
   </div>
 </section>
 
-<!-- 7. FAQ -->
+<!-- 9. FAQ -->
 <section class="section" id="faq">
   <div class="section-header">
-    <div class="section-num">7</div>
+    <div class="section-num">9</div>
     <div class="section-title">よくある質問</div>
   </div>
   <div class="section-body">
 
     <div class="faq-item">
-      <div class="faq-q">ログインできません</div>
-      <div class="faq-a">「このアカウントはアクセスが許可されていません」と表示される場合、そのGoogleアカウントが許可リストに未登録です。管理者にGmailアドレスを伝えて追加してもらってください。</div>
+      <div class="faq-q"><div class="faq-q-icon">Q</div>ログインできません</div>
+      <div class="faq-a"><div class="faq-a-icon">A</div>「このアカウントはアクセスが許可されていません」と表示される場合、そのGoogleアカウントが許可リストに未登録です。管理者にGmailアドレスを伝えて追加してもらってください。</div>
     </div>
 
     <div class="faq-item">
-      <div class="faq-q">地図が真っ白（または灰色）で表示されません</div>
-      <div class="faq-a">電波がない場所では地図タイルを読み込めません。事前にWi-Fiや電波がある場所で「📥 オフライン用に地図を保存」を実行しておいてください。</div>
+      <div class="faq-q"><div class="faq-q-icon">Q</div>地図が真っ白（または灰色）で表示されません</div>
+      <div class="faq-a"><div class="faq-a-icon">A</div>電波がない場所では地図タイルを読み込めません。事前にWi-Fiや電波がある場所で「📥 オフライン用に地図を保存」を実行しておいてください。</div>
     </div>
 
     <div class="faq-item">
-      <div class="faq-q">GPS座標が取得できません</div>
-      <div class="faq-a">ブラウザの位置情報の許可を確認してください。また、屋内や山の深部では精度が低下します。地図を長押しして手動で座標を指定する方法もあります。</div>
+      <div class="faq-q"><div class="faq-q-icon">Q</div>GPS座標が取得できません</div>
+      <div class="faq-a"><div class="faq-a-icon">A</div>ブラウザの位置情報の許可を確認してください。また、屋内や山の深部では精度が低下します。「地図で指定」ボタンを使って手動で座標を指定することもできます。</div>
     </div>
 
     <div class="faq-item">
-      <div class="faq-q">入力したデータはどこに保存されますか？</div>
-      <div class="faq-a">Supabase（インターネット上のデータベース）に保存されます。スマホを変えても、別の端末からでも同じデータが見られます。</div>
+      <div class="faq-q"><div class="faq-q-icon">Q</div>入力したデータはどこに保存されますか？</div>
+      <div class="faq-a"><div class="faq-a-icon">A</div>Supabase（インターネット上のデータベース）に保存されます。スマホを変えても、別の端末からでも同じデータを見られます。</div>
     </div>
 
     <div class="faq-item">
-      <div class="faq-q">罠を間違えて削除してしまいました</div>
-      <div class="faq-a">削除したデータは復元できません。再度「＋ 罠を追加」から登録し直してください。</div>
+      <div class="faq-q"><div class="faq-q-icon">Q</div>罠を間違えて削除してしまいました</div>
+      <div class="faq-a"><div class="faq-a-icon">A</div>削除したデータは復元できません。再度「＋ 追加」から登録し直してください。</div>
     </div>
 
     <div class="faq-item">
-      <div class="faq-q">地図を長押ししてもフォームが開きません</div>
-      <div class="faq-a">ブラウザによっては長押し動作が異なる場合があります。0.6秒以上しっかり押さえてください。開かない場合は「＋ 追加」ボタンを使って座標を手動入力してください。</div>
+      <div class="faq-q"><div class="faq-q-icon">Q</div>認識番号（A-001など）は変更できますか？</div>
+      <div class="faq-a"><div class="faq-a-icon">A</div>編集フォームから変更できます。ただし他の人と番号が重複しないようご注意ください。</div>
     </div>
 
     <div class="faq-item">
-      <div class="faq-q">認識番号（A-001など）は変更できますか？</div>
-      <div class="faq-a">編集フォームから変更できます。ただし他の人と番号が重複しないようご注意ください。</div>
+      <div class="faq-q"><div class="faq-q-icon">Q</div>ログアウトしたらデータは消えますか？</div>
+      <div class="faq-a"><div class="faq-a-icon">A</div>データはサーバーに保存されているので消えません。次回ログインすると同じデータが表示されます。</div>
     </div>
 
   </div>
