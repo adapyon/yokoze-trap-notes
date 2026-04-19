@@ -1064,6 +1064,7 @@ function App({session, onLogout}) {
             {label:'📋 一覧', onClick:() => setMobTab('list')},
             {label:'＋ 追加', onClick:openNewTrap, bold:true},
             {label:'📍 現在地', onClick:handleLocate, disabled:locating},
+            {label:'⛺ ベース', onClick:flyToBase},
           ].map(({label, onClick, bold, disabled}) => (
             <button key={label} onClick={onClick} disabled={disabled}
               style={{display:'flex', alignItems:'center', gap:3, background: bold ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.12)', border:'1.5px solid rgba(255,255,255,0.28)', borderRadius:'0.625rem', color:'white', fontSize:'0.72rem', fontWeight: bold ? 900 : 700, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit', opacity: disabled ? 0.5 : 1, whiteSpace:'nowrap'}}>
@@ -1141,10 +1142,6 @@ function App({session, onLogout}) {
         <button className={'nav-btn' + (mobileTab==='map' ? ' active' : '')} onClick={() => setMobTab('map')}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6-10l6-3m6 16l-4.553 2.276A1 1 0 0115 21.382V10.618a1 1 0 01.553-.894L21 7v13z"/></svg>
           地図
-        </button>
-        <button className="nav-btn" onClick={flyToBase}>
-          <span style={{fontSize:'1.35rem', lineHeight:1}}>⛺</span>
-          ベース
         </button>
         <button className={'nav-btn' + (mobileTab==='list' ? ' active' : '')} onClick={() => setMobTab('list')}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4"/></svg>
