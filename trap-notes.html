@@ -87,6 +87,9 @@ textarea.field-input{height:auto;padding:.875rem 1rem;resize:none;line-height:1.
 .sighting-item{display:flex;gap:12px;align-items:flex-start;padding:.875rem 0;border-bottom:1px solid var(--forest-100)}
 .sighting-item:last-child{border-bottom:none}
 
+/* Sheet footer — sticky action buttons at bottom of form sheets */
+.sheet-footer{position:sticky;bottom:0;left:0;right:0;background:white;border-top:1.5px solid var(--forest-100);padding:12px 1.375rem;padding-bottom:max(1rem,env(safe-area-inset-bottom));display:flex;gap:12px;z-index:1;flex-shrink:0}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -546,15 +549,14 @@ function TrapForm({draft, setDraft, editId, gpsLoading, gpsError, onSave, onClos
             {gpsError && <p style={{fontSize:'0.75rem', color:'#DC2626', marginTop:6, fontWeight:700}}>{gpsError}</p>}
           </div>
 
-          <div style={{marginBottom:'1.25rem'}}>
+          <div style={{marginBottom:'0.5rem'}}>
             <label style={labelSt}>メモ</label>
             <textarea className="field-input" rows={3} placeholder="設置場所の特徴、餌の種類など…" value={draft.notes} onChange={e => set('notes', e.target.value)}/>
           </div>
-
-          <div style={{display:'flex', gap:12, paddingBottom:'0.5rem'}}>
-            <button onClick={onClose} style={{flex:1, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', color:'var(--forest-600)', background:'white', fontSize:'1rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>キャンセル</button>
-            <button onClick={onSave} disabled={!draft.trapId.trim()} style={{flex:2, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'none', background:'linear-gradient(135deg,var(--forest-500),var(--forest-800))', color:'white', fontSize:'1rem', fontWeight:900, cursor:'pointer', opacity:!draft.trapId.trim() ? 0.4 : 1, fontFamily:'inherit'}}>保存する 🌿</button>
-          </div>
+        </div>
+        <div className="sheet-footer">
+          <button onClick={onClose} style={{flex:1, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', color:'var(--forest-600)', background:'white', fontSize:'1rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>キャンセル</button>
+          <button onClick={onSave} disabled={!draft.trapId.trim()} style={{flex:2, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'none', background:'linear-gradient(135deg,var(--forest-500),var(--forest-800))', color:'white', fontSize:'1rem', fontWeight:900, cursor:'pointer', opacity:!draft.trapId.trim() ? 0.4 : 1, fontFamily:'inherit'}}>保存する 🌿</button>
         </div>
       </div>
     </div>
@@ -589,15 +591,14 @@ function SightingForm({draft, setDraft, onSave, onClose}) {
             <input type="datetime-local" className="field-input" value={draft.timestamp} onChange={e => set('timestamp', e.target.value)}/>
           </div>
 
-          <div style={{marginBottom:'1.25rem'}}>
+          <div style={{marginBottom:'0.5rem'}}>
             <label style={labelSt}>メモ</label>
             <textarea className="field-input" rows={3} placeholder="頭数・行動・カメラの設定など…" value={draft.notes} onChange={e => set('notes', e.target.value)}/>
           </div>
-
-          <div style={{display:'flex', gap:12, paddingBottom:'0.5rem'}}>
-            <button onClick={onClose} style={{flex:1, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', color:'var(--forest-600)', background:'white', fontSize:'1rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>キャンセル</button>
-            <button onClick={onSave} style={{flex:2, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'none', background:'linear-gradient(135deg,var(--forest-500),var(--forest-800))', color:'white', fontSize:'1rem', fontWeight:900, cursor:'pointer', fontFamily:'inherit'}}>記録する 📷</button>
-          </div>
+        </div>
+        <div className="sheet-footer">
+          <button onClick={onClose} style={{flex:1, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'2px solid var(--forest-200)', color:'var(--forest-600)', background:'white', fontSize:'1rem', fontWeight:800, cursor:'pointer', fontFamily:'inherit'}}>キャンセル</button>
+          <button onClick={onSave} style={{flex:2, height:'3.25rem', borderRadius:'var(--radius-btn)', border:'none', background:'linear-gradient(135deg,var(--forest-500),var(--forest-800))', color:'white', fontSize:'1rem', fontWeight:900, cursor:'pointer', fontFamily:'inherit'}}>記録する 📷</button>
         </div>
       </div>
     </div>
@@ -683,9 +684,10 @@ function App({session, onLogout}) {
   const mapRef    = useRef(null);
   const markers   = useRef({});
   const pickRef   = useRef(false);
-  const locDotRef = useRef(null);
-  const locCircRef= useRef(null);
-  const locFlyDone= useRef(false);
+  const locDotRef    = useRef(null);
+  const locCircRef   = useRef(null);
+  const locFlyDone   = useRef(false);
+  const openTrapAtRef= useRef(null);
 
   // Load traps from Supabase on mount
   useEffect(() => {
@@ -712,13 +714,13 @@ function App({session, onLogout}) {
       maxZoom:18
     }).addTo(map);
 
-    // カリラボ 🏠 常設マーカー
+    // カリラボ ⛺ 常設マーカー
     const homeIcon = L.divIcon({
-      html: '<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.35))">🏠</div>',
+      html: '<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:28px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.35))">⛺</div>',
       className:'', iconSize:[44,44], iconAnchor:[22,22], popupAnchor:[0,-24]
     });
     L.marker(CENTER, {icon:homeIcon, zIndexOffset:1000}).addTo(map)
-      .bindPopup('<div style="font-family:\'Zen Maru Gothic\',sans-serif;font-size:14px;font-weight:900;color:#0D2614;padding:2px 0">🏠 カリラボ</div>');
+      .bindPopup('<div style="font-family:\'Zen Maru Gothic\',sans-serif;font-size:14px;font-weight:900;color:#0D2614;padding:2px 0">⛺ 基地：カリラボ</div>');
 
     map.on('click', e => {
       if (!pickRef.current) return;
@@ -727,6 +729,24 @@ function App({session, onLogout}) {
       setPicking(false);
       setSF(true);
     });
+
+    // Long-press (600ms) to open new trap form at that location
+    let lpTimer = null;
+    let lpMoved = false;
+    let lpLatLng = null;
+    map.on('touchstart', e => {
+      if (pickRef.current) return;
+      lpMoved = false;
+      lpLatLng = e.latlng;
+      lpTimer = setTimeout(() => {
+        if (lpMoved || !lpLatLng) return;
+        if (navigator.vibrate) navigator.vibrate(40);
+        if (openTrapAtRef.current) openTrapAtRef.current(lpLatLng.lat.toFixed(6), lpLatLng.lng.toFixed(6));
+      }, 600);
+    });
+    map.on('touchmove',   () => { lpMoved = true; if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+    map.on('touchend',    () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
+    map.on('touchcancel', () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } });
 
     map.on('locationfound', e => {
       setLocating(false);
@@ -794,6 +814,13 @@ function App({session, onLogout}) {
     setDraft({trapId:nextTrapId(traps), type:'kukuri', status:'稼働中', installedAt:new Date().toISOString().slice(0,10), lat:'', lng:'', notes:''});
     setGpsErr(''); setSF(true);
   }, [traps]);
+
+  const openNewTrapAt = useCallback((lat, lng) => {
+    setEditId(null);
+    setDraft({trapId:nextTrapId(traps), type:'kukuri', status:'稼働中', installedAt:new Date().toISOString().slice(0,10), lat, lng, notes:''});
+    setGpsErr(''); setSF(true);
+  }, [traps]);
+  useEffect(() => { openTrapAtRef.current = openNewTrapAt; }, [openNewTrapAt]);
 
   const openEditTrap = useCallback((t, e) => {
     e && e.stopPropagation();
@@ -909,27 +936,42 @@ function App({session, onLogout}) {
     <div style={{height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--parchment)'}}>
       {offline && <div className="offline-bar">📡 オフラインモード — キャッシュデータを表示中</div>}
 
-      <header style={{background:'linear-gradient(135deg,var(--forest-900) 0%,var(--forest-700) 100%)', color:'white', padding:'10px 16px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-        <div>
-          <div style={{fontSize:'1rem', fontWeight:900, letterSpacing:'0.01em', lineHeight:1.3}}>🌲 横瀬町 罠猟ノート</div>
-          <div style={{fontSize:'0.68rem', color:'rgba(176,228,192,0.85)', display:'flex', gap:10, marginTop:3, fontWeight:700}}>
-            <span>全{traps.length}件</span>
-            <span style={{color:'#6EE7B7'}}>🟢 {counts['稼働中']}</span>
-            <span style={{color:'#FCD34D'}}>🟡 {counts['要確認']}</span>
-            <span style={{color:'#94A3B8'}}>⚫ {counts['撤去済み']}</span>
+      <header style={{background:'linear-gradient(135deg,var(--forest-900) 0%,var(--forest-700) 100%)', color:'white', padding:'8px 16px 8px', flexShrink:0}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+          <div>
+            <div style={{fontSize:'1rem', fontWeight:900, letterSpacing:'0.01em', lineHeight:1.3}}>🌲 横瀬町 罠猟ノート</div>
+            <div style={{fontSize:'0.68rem', color:'rgba(176,228,192,0.85)', display:'flex', gap:10, marginTop:2, fontWeight:700}}>
+              <span>全{traps.length}件</span>
+              <span style={{color:'#6EE7B7'}}>🟢 {counts['稼働中']}</span>
+              <span style={{color:'#FCD34D'}}>🟡 {counts['要確認']}</span>
+              <span style={{color:'#94A3B8'}}>⚫ {counts['撤去済み']}</span>
+            </div>
+          </div>
+          <div style={{display:'flex', alignItems:'center', gap:8}}>
+            <button onClick={openNewTrap} className="desktop-addbtn"
+              style={{display:'none', alignItems:'center', gap:8, background:'rgba(255,255,255,0.14)', border:'1.5px solid rgba(255,255,255,0.28)', borderRadius:'var(--radius-btn)', color:'white', fontSize:'0.875rem', fontWeight:800, padding:'8px 14px', cursor:'pointer', fontFamily:'inherit'}}>
+              ＋ 罠を追加
+            </button>
+            <button onClick={onLogout} title={session.user.email}
+              style={{background:'rgba(255,255,255,0.12)', border:'1.5px solid rgba(255,255,255,0.22)', borderRadius:'0.75rem', color:'rgba(255,255,255,0.85)', fontSize:'0.72rem', fontWeight:700, padding:'6px 10px', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5}}>
+              <span style={{fontSize:'0.85rem'}}>👤</span>
+              <span className="desktop-addbtn" style={{display:'none'}}>ログアウト</span>
+              <span style={{fontSize:'0.6rem', opacity:0.7}}>⏏</span>
+            </button>
           </div>
         </div>
-        <div style={{display:'flex', alignItems:'center', gap:8}}>
-          <button onClick={openNewTrap} className="desktop-addbtn"
-            style={{display:'none', alignItems:'center', gap:8, background:'rgba(255,255,255,0.14)', border:'1.5px solid rgba(255,255,255,0.28)', borderRadius:'var(--radius-btn)', color:'white', fontSize:'0.875rem', fontWeight:800, padding:'8px 14px', cursor:'pointer', fontFamily:'inherit'}}>
-            ＋ 罠を追加
-          </button>
-          <button onClick={onLogout} title={session.user.email}
-            style={{background:'rgba(255,255,255,0.12)', border:'1.5px solid rgba(255,255,255,0.22)', borderRadius:'0.75rem', color:'rgba(255,255,255,0.85)', fontSize:'0.72rem', fontWeight:700, padding:'6px 10px', cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', gap:5}}>
-            <span style={{fontSize:'0.85rem'}}>👤</span>
-            <span className="desktop-addbtn" style={{display:'none'}}>ログアウト</span>
-            <span style={{fontSize:'0.6rem', opacity:0.7}}>⏏</span>
-          </button>
+        {/* Mobile action strip — always visible below title */}
+        <div className="mobile-only" style={{display:'flex', gap:6, marginTop:7}}>
+          {[
+            {label:'📋 一覧', onClick:() => setMobTab('list')},
+            {label:'＋ 追加', onClick:openNewTrap, bold:true},
+            {label:'📍 現在地', onClick:handleLocate, disabled:locating},
+          ].map(({label, onClick, bold, disabled}) => (
+            <button key={label} onClick={onClick} disabled={disabled}
+              style={{display:'flex', alignItems:'center', gap:3, background: bold ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.12)', border:'1.5px solid rgba(255,255,255,0.28)', borderRadius:'0.625rem', color:'white', fontSize:'0.72rem', fontWeight: bold ? 900 : 700, padding:'5px 10px', cursor:'pointer', fontFamily:'inherit', opacity: disabled ? 0.5 : 1, whiteSpace:'nowrap'}}>
+              {label}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -955,7 +997,7 @@ function App({session, onLogout}) {
             {!picking && (
               <>
                 <button onClick={handleCache} disabled={caching} style={{position:'absolute', top:'1rem', left:'1rem', zIndex:400, background:'rgba(255,255,255,0.92)', color:'var(--forest-700)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', padding:'8px 14px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', opacity:caching ? 0.6 : 1, fontFamily:'inherit', transition:'opacity 0.2s'}}>
-                  {caching ? '⏳ 保存中…' : '🗺 このエリアを保存'}
+                  {caching ? '⏳ 保存中…' : '📥 オフライン用に地図を保存'}
                 </button>
                 <button onClick={handleLocate} disabled={locating} title="現在地へ移動"
                   style={{position:'absolute', top:'1rem', right:'1rem', zIndex:400, width:'44px', height:'44px', background:'white', color: locating ? 'var(--forest-300)' : 'var(--forest-600)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.25rem', cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', fontFamily:'inherit', transition:'opacity 0.2s'}}>
