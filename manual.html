@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>横瀬町 罠猟ノート — 使い方マニュアル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --forest-900:#0D2614;--forest-800:#163D22;--forest-700:#1E5430;
+  --forest-600:#2B7043;--forest-500:#3A8F56;--forest-400:#52AE72;
+  --forest-300:#78C994;--forest-200:#B0E4C0;--forest-100:#DDF4E5;
+  --forest-50:#F0FAF4;
+  --amber-500:#D4780A;--amber-100:#FEF3C7;
+  --parchment:#F4EDD8;--parchment-dark:#EBE1C5;
+  --shadow:0 2px 16px rgba(30,80,40,0.10),0 1px 4px rgba(0,0,0,0.06);
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Zen Maru Gothic','Hiragino Sans','YuGothic',sans-serif;
+  background:var(--parchment);color:var(--forest-900);
+  font-size:17px;line-height:1.8;-webkit-font-smoothing:antialiased;
+}
+
+/* ── Header ── */
+.site-header{
+  background:linear-gradient(135deg,var(--forest-900),var(--forest-700));
+  color:white;padding:20px 20px 16px;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 12px rgba(0,0,0,0.25);
+}
+.site-header h1{font-size:1.1rem;font-weight:900;letter-spacing:0.02em}
+.site-header .sub{font-size:0.72rem;color:rgba(176,228,192,0.8);font-weight:700;margin-top:3px}
+.app-link{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-top:12px;background:rgba(255,255,255,0.15);
+  border:1.5px solid rgba(255,255,255,0.3);border-radius:2rem;
+  color:white;font-size:0.85rem;font-weight:800;padding:7px 16px;
+  text-decoration:none;letter-spacing:0.01em;
+}
+.app-link:hover{background:rgba(255,255,255,0.25)}
+
+/* ── TOC ── */
+.toc{background:white;border:1.5px solid var(--forest-200);border-radius:1.25rem;padding:20px 24px;margin:20px 16px;box-shadow:var(--shadow)}
+.toc h2{font-size:0.9rem;font-weight:900;color:var(--forest-600);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.06em}
+.toc ol{padding-left:1.5em}
+.toc li{margin:6px 0}
+.toc a{color:var(--forest-600);font-weight:700;font-size:0.95rem;text-decoration:none}
+.toc a:hover{text-decoration:underline}
+
+/* ── Sections ── */
+main{padding:0 16px 60px}
+.section{margin-bottom:32px}
+.section-header{
+  display:flex;align-items:center;gap:12px;
+  background:linear-gradient(135deg,var(--forest-800),var(--forest-600));
+  color:white;padding:14px 20px;border-radius:1.25rem 1.25rem 0 0;
+}
+.section-num{
+  background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.35);
+  border-radius:50%;width:32px;height:32px;display:flex;align-items:center;
+  justify-content:center;font-size:0.85rem;font-weight:900;flex-shrink:0;
+}
+.section-title{font-size:1.1rem;font-weight:900;letter-spacing:0.01em}
+.section-body{
+  background:white;border:1.5px solid var(--forest-200);
+  border-top:none;border-radius:0 0 1.25rem 1.25rem;
+  padding:22px 20px;box-shadow:var(--shadow);
+}
+.section-body p{margin-bottom:14px;font-size:1rem;line-height:1.85}
+.section-body p:last-child{margin-bottom:0}
+
+/* ── Screenshot ── */
+.screenshot-wrap{
+  text-align:center;margin:20px 0;
+  background:var(--forest-50);border:1.5px solid var(--forest-200);
+  border-radius:1rem;padding:12px;overflow:hidden;
+}
+.screenshot-wrap img{
+  max-width:100%;border-radius:0.75rem;
+  box-shadow:0 4px 20px rgba(0,0,0,0.15);
+  display:block;margin:0 auto;
+}
+.screenshot-wrap.placeholder{
+  padding:40px 20px;
+  color:var(--forest-300);font-weight:700;font-size:0.85rem;
+}
+.img-caption{font-size:0.78rem;color:var(--forest-400);font-weight:700;margin-top:10px;text-align:center}
+
+/* ── Steps ── */
+.steps{list-style:none;padding:0;margin:16px 0}
+.steps li{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:12px 0;border-bottom:1px solid var(--forest-100);
+  font-size:1rem;line-height:1.7;
+}
+.steps li:last-child{border-bottom:none}
+.step-num{
+  background:var(--forest-600);color:white;border-radius:50%;
+  width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+  font-size:0.8rem;font-weight:900;flex-shrink:0;margin-top:2px;
+}
+
+/* ── Tips / Notes ── */
+.tip{
+  background:var(--amber-100);border:1.5px solid #FCD34D;
+  border-radius:1rem;padding:14px 18px;margin:16px 0;
+  font-size:0.9rem;font-weight:700;color:#78350F;line-height:1.7;
+}
+.tip::before{content:'💡 '}
+.note{
+  background:var(--forest-50);border:1.5px solid var(--forest-200);
+  border-radius:1rem;padding:14px 18px;margin:16px 0;
+  font-size:0.9rem;font-weight:700;color:var(--forest-700);line-height:1.7;
+}
+.note::before{content:'ℹ️ '}
+
+/* ── FAQ ── */
+.faq-item{margin-bottom:16px}
+.faq-q{
+  background:var(--forest-50);border:1.5px solid var(--forest-200);
+  border-radius:0.875rem 0.875rem 0 0;padding:14px 18px;
+  font-weight:900;font-size:0.97rem;color:var(--forest-800);
+  display:flex;align-items:flex-start;gap:10px;
+}
+.faq-q::before{content:'Q';background:var(--forest-600);color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;flex-shrink:0;margin-top:1px}
+.faq-a{
+  background:white;border:1.5px solid var(--forest-200);border-top:none;
+  border-radius:0 0 0.875rem 0.875rem;padding:14px 18px;
+  font-size:0.95rem;color:var(--forest-800);line-height:1.8;
+  display:flex;align-items:flex-start;gap:10px;
+}
+.faq-a::before{content:'A';background:var(--amber-500);color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;flex-shrink:0;margin-top:1px}
+
+/* ── Badge ── */
+.badge{
+  display:inline-block;background:var(--forest-600);color:white;
+  font-size:0.75rem;font-weight:800;padding:2px 10px;border-radius:9999px;
+  vertical-align:middle;margin:0 2px;
+}
+.badge.yellow{background:#D97706}
+.badge.red{background:#DC2626}
+.badge.gray{background:#6B7280}
+
+/* ── Footer ── */
+footer{
+  background:var(--forest-900);color:rgba(176,228,192,0.7);
+  text-align:center;padding:28px 20px;font-size:0.8rem;font-weight:700;
+  letter-spacing:0.04em;
+}
+</style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<header class="site-header">
+  <h1>🌲 横瀬町 罠猟ノート</h1>
+  <div class="sub">使い方マニュアル</div>
+  <a class="app-link" href="trap-notes.html">📱 アプリを開く →</a>
+</header>
+
+<!-- 目次 -->
+<nav class="toc" aria-label="目次">
+  <h2>📋 目次</h2>
+  <ol>
+    <li><a href="#intro">はじめに</a></li>
+    <li><a href="#login">ログイン方法</a></li>
+    <li><a href="#map">地図画面の見方</a></li>
+    <li><a href="#add">罠を追加する</a></li>
+    <li><a href="#list">一覧・編集・削除</a></li>
+    <li><a href="#offline">オフライン用に地図を保存する</a></li>
+    <li><a href="#faq">よくある質問</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 1. はじめに -->
+<section class="section" id="intro">
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <div class="section-title">はじめに</div>
+  </div>
+  <div class="section-body">
+    <p>
+      <strong>横瀬町 罠猟ノート</strong>は、罠の設置場所・状態・目撃記録をスマホで管理するアプリです。
+      国土地理院の地図にピン🪤を立てて、どこに何の罠があるかを一目で確認できます。
+    </p>
+    <p>
+      データはインターネット上（Supabase）に保存されるので、複数の人が同じ情報を共有できます。
+      また、地図タイルをあらかじめ保存しておけば、電波が届かない山中でも地図を表示できます。
+    </p>
+    <div class="note">
+      このアプリは<strong>招待制</strong>です。Googleアカウントでログインした後、管理者が許可したアドレスのみ使用できます。
+    </div>
+  </div>
+</section>
+
+<!-- 2. ログイン -->
+<section class="section" id="login">
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <div class="section-title">ログイン方法</div>
+  </div>
+  <div class="section-body">
+    <div class="screenshot-wrap">
+      <img src="screenshot1.png" alt="ログイン画面" onerror="this.parentElement.classList.add('placeholder');this.style.display='none';this.parentElement.innerHTML+='🖼️ screenshot1.png'"/>
+      <p class="img-caption">▲ ログイン画面</p>
+    </div>
+    <ol class="steps">
+      <li><div class="step-num">1</div><span>アプリを開くとログイン画面が表示されます。</span></li>
+      <li><div class="step-num">2</div><span>「<strong>Googleでログイン</strong>」ボタンをタップします。</span></li>
+      <li><div class="step-num">3</div><span>Googleアカウントの選択画面が開くので、許可されたアカウントを選びます。</span></li>
+      <li><div class="step-num">4</div><span>「<strong>Googleでログイン中…</strong>」と表示されたあと、地図画面が開けばログイン成功です。</span></li>
+    </ol>
+    <div class="tip">
+      許可されていないアカウントでログインすると「このアカウントはアクセスが許可されていません」と表示されます。管理者にメールアドレスを伝えて登録してもらってください。
+    </div>
+  </div>
+</section>
+
+<!-- 3. 地図画面 -->
+<section class="section" id="map">
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <div class="section-title">地図画面の見方</div>
+  </div>
+  <div class="section-body">
+    <div class="screenshot-wrap">
+      <img src="screenshot2.png" alt="地図画面" onerror="this.parentElement.classList.add('placeholder');this.style.display='none';this.parentElement.innerHTML+='🖼️ screenshot2.png'"/>
+      <p class="img-caption">▲ 地図画面</p>
+    </div>
+    <p>地図上には以下のアイコンが表示されます：</p>
+    <ul class="steps">
+      <li><div class="step-num">⛺</div><span><strong>ベース：カリラボ</strong> — 活動の拠点</span></li>
+      <li><div class="step-num">🍽️</div><span><strong>横瀬ジビエ製造場</strong> — 搬入先</span></li>
+      <li><div class="step-num">🪤</div><span><strong>くくり罠</strong> <span class="badge">稼働中</span> — 緑の円</span></li>
+      <li><div class="step-num">📦</div><span><strong>はこ罠</strong> <span class="badge yellow">要確認</span> — 黄色の円</span></li>
+      <li><div class="step-num">❓</div><span><strong>その他の罠</strong> <span class="badge gray">撤去済み</span> — グレーの円</span></li>
+    </ul>
+    <p>ピンをタップするとポップアップが開き、設置日や目撃情報を確認できます。</p>
+    <p>
+      画面上部のボタン：<br>
+      <strong>📥 オフライン用に地図を保存</strong> — 現在表示している範囲をダウンロード<br>
+      <strong>📍</strong> — 現在地へ移動（青い点が地図上に表示されます）
+    </p>
+    <p>
+      ヘッダーのボタン：<br>
+      <strong>📋 一覧</strong> — 罠の一覧に切り替え<br>
+      <strong>＋ 追加</strong> — 新しい罠を登録<br>
+      <strong>📍 現在地</strong> — 地図を現在地に移動<br>
+      <strong>⛺ ベース</strong> — カリラボに地図を戻す
+    </p>
+    <div class="tip">
+      地図を長押し（約0.6秒）すると、その場所の座標が入力済みの「罠の追加フォーム」が開きます。
+    </div>
+  </div>
+</section>
+
+<!-- 4. 罠を追加 -->
+<section class="section" id="add">
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <div class="section-title">罠を追加する</div>
+  </div>
+  <div class="section-body">
+    <div class="screenshot-wrap">
+      <img src="screenshot3.png" alt="罠の追加フォーム" onerror="this.parentElement.classList.add('placeholder');this.style.display='none';this.parentElement.innerHTML+='🖼️ screenshot3.png'"/>
+      <p class="img-caption">▲ 罠の追加フォーム</p>
+    </div>
+    <ol class="steps">
+      <li><div class="step-num">1</div><span>画面下部の <strong>＋ 罠を追加</strong> ボタンをタップします。<br>または地図を<strong>長押し</strong>すると、その地点の座標が自動で入力されます。</span></li>
+      <li><div class="step-num">2</div><span><strong>認識番号</strong>（例：A-001）を確認・入力します。自動で次の番号が入ります。</span></li>
+      <li><div class="step-num">3</div><span><strong>罠の種類</strong>（くくり罠 / はこ罠 / その他）を選びます。</span></li>
+      <li><div class="step-num">4</div><span><strong>状態</strong>（稼働中 / 要確認 / 撤去済み）を選びます。</span></li>
+      <li><div class="step-num">5</div><span><strong>設置日</strong>を入力します。</span></li>
+      <li><div class="step-num">6</div><span>
+        <strong>GPS座標</strong>を入力します。方法は3つ：
+        <ul style="margin-top:6px;padding-left:1.2em;line-height:2">
+          <li>📍 <strong>現在地</strong>ボタン → 今いる場所の座標を自動取得</li>
+          <li>🗺 <strong>地図で指定</strong>ボタン → 地図をタップして指定</li>
+          <li>地図を<strong>長押し</strong>して開いた場合は自動入力済み</li>
+        </ul>
+      </span></li>
+      <li><div class="step-num">7</div><span>必要があれば<strong>メモ</strong>（設置場所の特徴、餌の種類など）を入力します。</span></li>
+      <li><div class="step-num">8</div><span><strong>保存する</strong>ボタンをタップして完了です。</span></li>
+    </ol>
+    <div class="tip">
+      電波が届かない場所では「GPS取得失敗」になることがあります。その場合は地図で指定するか、後から座標を入力してください。
+    </div>
+  </div>
+</section>
+
+<!-- 5. 一覧・編集・削除 -->
+<section class="section" id="list">
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <div class="section-title">罠の一覧を見る・編集・削除</div>
+  </div>
+  <div class="section-body">
+    <div class="screenshot-wrap">
+      <img src="screenshot4.png" alt="罠の一覧画面" onerror="this.parentElement.classList.add('placeholder');this.style.display='none';this.parentElement.innerHTML+='🖼️ screenshot4.png'"/>
+      <p class="img-caption">▲ 罠の一覧画面</p>
+    </div>
+    <p>ヘッダーの <strong>📋 一覧</strong> または下部ナビの <strong>一覧</strong> タブをタップすると一覧画面に切り替わります。</p>
+
+    <p><strong>🔍 検索・絞り込み</strong></p>
+    <ul class="steps">
+      <li><div class="step-num">🔍</div><span>テキスト欄に認識番号やメモを入力して検索できます。</span></li>
+      <li><div class="step-num">▼</div><span>「状態」「種類」のプルダウンで絞り込みができます。</span></li>
+    </ul>
+
+    <p style="margin-top:16px"><strong>✏️ 編集する</strong></p>
+    <ol class="steps">
+      <li><div class="step-num">1</div><span>編集したい罠のカードにある <strong>編集</strong> ボタンをタップします。</span></li>
+      <li><div class="step-num">2</div><span>フォームが開くので変更して「保存する」をタップします。</span></li>
+    </ol>
+
+    <p style="margin-top:16px"><strong>🗑 削除する</strong></p>
+    <ol class="steps">
+      <li><div class="step-num">1</div><span>削除したい罠のカードにある <span class="badge red">削除</span> ボタンをタップします。</span></li>
+      <li><div class="step-num">2</div><span>確認ダイアログが表示されるので「削除する」をタップします。</span></li>
+    </ol>
+
+    <p style="margin-top:16px"><strong>📷 トレイルカメラ記録を追加する</strong></p>
+    <ol class="steps">
+      <li><div class="step-num">1</div><span>罠のカードの <strong>詳細</strong> ボタンをタップします。</span></li>
+      <li><div class="step-num">2</div><span>詳細画面で「＋ 記録追加」をタップします。</span></li>
+      <li><div class="step-num">3</div><span>動物の種類・日時・メモを入力して「記録する」をタップします。</span></li>
+    </ol>
+    <div class="note">
+      削除した罠・記録は元に戻せません。ご注意ください。
+    </div>
+  </div>
+</section>
+
+<!-- 6. オフライン -->
+<section class="section" id="offline">
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <div class="section-title">オフライン用に地図を保存する</div>
+  </div>
+  <div class="section-body">
+    <div class="screenshot-wrap">
+      <img src="screenshot5.png" alt="オフライン保存" onerror="this.parentElement.classList.add('placeholder');this.style.display='none';this.parentElement.innerHTML+='🖼️ screenshot5.png'"/>
+      <p class="img-caption">▲ オフライン保存ボタン</p>
+    </div>
+    <p>
+      山の中では電波が届かず地図が表示されないことがあります。
+      あらかじめ地図を保存しておくと、オフラインでも地図が見られます。
+    </p>
+    <ol class="steps">
+      <li><div class="step-num">1</div><span>地図タブを開き、保存したいエリアが画面に収まるようにズームします。</span></li>
+      <li><div class="step-num">2</div><span>画面左上の <strong>📥 オフライン用に地図を保存</strong> ボタンをタップします。</span></li>
+      <li><div class="step-num">3</div><span>「✅ ○○タイル保存！オフライン利用可能」と表示されたら完了です。</span></li>
+    </ol>
+    <div class="tip">
+      保存できるタイル数には上限があります。広いエリアを一度に保存しようとすると「エリア大きすぎ」と表示されます。その場合はズームインして範囲を絞ってください。
+    </div>
+    <p><strong>📊 保存状況の確認・クリア</strong></p>
+    <p>
+      保存ボタンの右隣の <strong>📊</strong> ボタンをタップすると、保存済みのタイル数・容量が確認できます。
+      容量を空けたいときはここから「🗑 キャッシュをクリア」できます。
+    </p>
+  </div>
+</section>
+
+<!-- 7. FAQ -->
+<section class="section" id="faq">
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <div class="section-title">よくある質問</div>
+  </div>
+  <div class="section-body">
+
+    <div class="faq-item">
+      <div class="faq-q">ログインできません</div>
+      <div class="faq-a">「このアカウントはアクセスが許可されていません」と表示される場合、そのGoogleアカウントが許可リストに未登録です。管理者にGmailアドレスを伝えて追加してもらってください。</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">地図が真っ白（または灰色）で表示されません</div>
+      <div class="faq-a">電波がない場所では地図タイルを読み込めません。事前にWi-Fiや電波がある場所で「📥 オフライン用に地図を保存」を実行しておいてください。</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">GPS座標が取得できません</div>
+      <div class="faq-a">ブラウザの位置情報の許可を確認してください。また、屋内や山の深部では精度が低下します。地図を長押しして手動で座標を指定する方法もあります。</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">入力したデータはどこに保存されますか？</div>
+      <div class="faq-a">Supabase（インターネット上のデータベース）に保存されます。スマホを変えても、別の端末からでも同じデータが見られます。</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">罠を間違えて削除してしまいました</div>
+      <div class="faq-a">削除したデータは復元できません。再度「＋ 罠を追加」から登録し直してください。</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">地図を長押ししてもフォームが開きません</div>
+      <div class="faq-a">ブラウザによっては長押し動作が異なる場合があります。0.6秒以上しっかり押さえてください。開かない場合は「＋ 追加」ボタンを使って座標を手動入力してください。</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">認識番号（A-001など）は変更できますか？</div>
+      <div class="faq-a">編集フォームから変更できます。ただし他の人と番号が重複しないようご注意ください。</div>
+    </div>
+
+  </div>
+</section>
+
+</main>
+
+<footer>
+  🌲 横瀬町 罠猟ノート マニュアル<br>
+  <span style="font-size:0.75rem;opacity:0.7">Yokoze Trap Field Notes</span>
+</footer>
+
+</body>
+</html>
