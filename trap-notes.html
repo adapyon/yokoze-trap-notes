@@ -105,7 +105,7 @@ const {useState, useEffect, useRef, useCallback} = React;
 /* ── Supabase ──────────────────────────────────────────────── */
 const SUPABASE_URL = 'https://ykojblrieeirgbxxurwh.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_40xB7vnxMkqTSywczaIA7g_Xol4pHbs';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /*
   Required Supabase SQL (run once in SQL Editor):
@@ -689,7 +689,7 @@ function App({session, onLogout}) {
 
   // Load traps from Supabase on mount
   useEffect(() => {
-    supabase.from('traps').select('*')
+    sbClient.from('traps').select('*')
       .eq('user_id', session.user.id)
       .order('created_at', {ascending:false})
       .then(({data, error}) => {
@@ -807,14 +807,14 @@ function App({session, onLogout}) {
     const now = new Date().toISOString();
     const uid = session.user.id;
     if (editTrapId) {
-      const {error} = await supabase.from('traps').update({
+      const {error} = await sbClient.from('traps').update({
         trap_id:draft.trapId, type:draft.type, status:draft.status,
         installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
         notes:draft.notes||'', updated_at:now
       }).eq('id', editTrapId).eq('user_id', uid);
       if (!error) setTraps(p => p.map(t => t.id===editTrapId ? {...t, ...draft, updatedAt:now} : t));
     } else {
-      const {data, error} = await supabase.from('traps').insert({
+      const {data, error} = await sbClient.from('traps').insert({
         trap_id:draft.trapId, type:draft.type, status:draft.status,
         installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
         notes:draft.notes||'', sightings:[], user_id:uid, created_at:now, updated_at:now
@@ -825,7 +825,7 @@ function App({session, onLogout}) {
   }, [draft, editTrapId, session]);
 
   const deleteTrap = useCallback(async (id) => {
-    const {error} = await supabase.from('traps').delete().eq('id', id).eq('user_id', session.user.id);
+    const {error} = await sbClient.from('traps').delete().eq('id', id).eq('user_id', session.user.id);
     if (!error) {
       setTraps(p => p.filter(t => t.id!==id));
       setDelId(null);
@@ -846,7 +846,7 @@ function App({session, onLogout}) {
     if (!trap) return;
     const newSightings = [...trap.sightings, sighting];
     const now = new Date().toISOString();
-    const {error} = await supabase.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', detailId).eq('user_id', session.user.id);
+    const {error} = await sbClient.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', detailId).eq('user_id', session.user.id);
     if (!error) setTraps(p => p.map(t => t.id===detailId ? {...t, sightings:newSightings, updatedAt:now} : t));
     setSSF(false); setSDraft(null);
   }, [sDraft, detailId, traps, session]);
@@ -856,7 +856,7 @@ function App({session, onLogout}) {
     if (!trap) return;
     const newSightings = trap.sightings.filter(s => s.id!==sightingId);
     const now = new Date().toISOString();
-    const {error} = await supabase.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', trapId).eq('user_id', session.user.id);
+    const {error} = await sbClient.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', trapId).eq('user_id', session.user.id);
     if (!error) setTraps(p => p.map(t => t.id===trapId ? {...t, sightings:newSightings, updatedAt:now} : t));
   }, [traps, session]);
 
@@ -1044,9 +1044,9 @@ function Root() {
   useEffect(() => {
     const checkAllowed = async (sess) => {
       if (!sess) { setAuthLoading(false); setAuthSession(null); return; }
-      const {data} = await supabase.from('allowed_emails').select('email').eq('email', sess.user.email).maybeSingle();
+      const {data} = await sbClient.from('allowed_emails').select('email').eq('email', sess.user.email).maybeSingle();
       if (!data) {
-        await supabase.auth.signOut();
+        await sbClient.auth.signOut();
         setAuthError('このアカウントはアクセスが許可されていません。管理者に連絡してください。');
         setAuthLoading(false);
         setAuthSession(null);
@@ -1057,7 +1057,7 @@ function Root() {
       }
     };
 
-    const {data:{subscription}} = supabase.auth.onAuthStateChange((event, sess) => {
+    const {data:{subscription}} = sbClient.auth.onAuthStateChange((event, sess) => {
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
         checkAllowed(sess);
       } else if (event === 'SIGNED_OUT') {
@@ -1072,11 +1072,11 @@ function Root() {
 
   const handleLogin = useCallback(async () => {
     const url = window.location.href.split('?')[0].split('#')[0];
-    await supabase.auth.signInWithOAuth({provider:'google', options:{redirectTo:url}});
+    await sbClient.auth.signInWithOAuth({provider:'google', options:{redirectTo:url}});
   }, []);
 
   const handleLogout = useCallback(async () => {
-    await supabase.auth.signOut();
+    await sbClient.auth.signOut();
   }, []);
 
   if (authLoading) return React.createElement(LoadingScreen);
