@@ -774,9 +774,11 @@ function App({session, onLogout}) {
   const [locating, setLocating]       = useState(false);
   const [toast, setToast]             = useState('');
   const [showCacheModal, setShowCacheModal] = useState(false);
+  const [mapType, setMapType] = useState(() => localStorage.getItem('yokose-maptype') || 'gsi');
 
   const mapDiv    = useRef(null);
   const mapRef    = useRef(null);
+  const tileRef   = useRef(null);
   const markers   = useRef({});
   const locDotRef    = useRef(null);
   const locCircRef   = useRef(null);
@@ -801,10 +803,12 @@ function App({session, onLogout}) {
     if (!mapDiv.current || mapRef.current) return;
     const map = L.map(mapDiv.current, {center:CENTER, zoom:ZOOM0, zoomControl:false});
     L.control.zoom({position:'bottomright'}).addTo(map);
-    new OfflineTiles('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
-      attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>',
-      maxZoom:18
-    }).addTo(map);
+    const initType = localStorage.getItem('yokose-maptype') || 'gsi';
+    const makeTile = (type) => type === 'osm'
+      ? L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19})
+      : new OfflineTiles('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>', maxZoom:18});
+    tileRef.current = makeTile(initType);
+    tileRef.current.addTo(map);
 
     // カリラボ ⛺ 常設マーカー
     const homeIcon = L.divIcon({
@@ -978,6 +982,18 @@ function App({session, onLogout}) {
     setSF(true);
   }, []);
 
+  const switchMap = useCallback((type) => {
+    if (!mapRef.current || !tileRef.current) return;
+    mapRef.current.removeLayer(tileRef.current);
+    const newTile = type === 'osm'
+      ? L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom:19})
+      : new OfflineTiles('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>', maxZoom:18});
+    newTile.addTo(mapRef.current);
+    tileRef.current = newTile;
+    setMapType(type);
+    localStorage.setItem('yokose-maptype', type);
+  }, []);
+
   const flyToBase = useCallback(() => {
     setMobTab('map');
     setTimeout(() => { if (mapRef.current) mapRef.current.flyTo(CENTER, ZOOM0, {duration:0.8}); }, 50);
@@ -1101,10 +1117,20 @@ function App({session, onLogout}) {
                     📊
                   </button>
                 </div>
-                <button onClick={handleLocate} disabled={locating} title="現在地へ移動"
-                  style={{position:'absolute', top:'1rem', right:'1rem', zIndex:400, width:'44px', height:'44px', background:'white', color: locating ? 'var(--forest-300)' : 'var(--forest-600)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.25rem', cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', fontFamily:'inherit', transition:'opacity 0.2s'}}>
-                  {locating ? '⏳' : '📍'}
-                </button>
+                <div style={{position:'absolute', top:'1rem', right:'1rem', zIndex:400, display:'flex', flexDirection:'column', gap:6}}>
+                  <button onClick={handleLocate} disabled={locating} title="現在地へ移動"
+                    style={{width:'44px', height:'44px', background:'white', color: locating ? 'var(--forest-300)' : 'var(--forest-600)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.25rem', cursor:'pointer', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)', fontFamily:'inherit', transition:'opacity 0.2s'}}>
+                    {locating ? '⏳' : '📍'}
+                  </button>
+                  <div style={{display:'flex', flexDirection:'column', gap:3, background:'rgba(255,255,255,0.92)', border:'1.5px solid var(--forest-200)', borderRadius:'0.875rem', overflow:'hidden', boxShadow:'var(--shadow-card)', backdropFilter:'blur(6px)'}}>
+                    {[['gsi','🗾 地理院'],['osm','🌍 OSM']].map(([t,label]) => (
+                      <button key={t} onClick={() => switchMap(t)}
+                        style={{width:'72px', padding:'5px 4px', border:'none', background: mapType===t ? 'var(--forest-100)' : 'transparent', color: mapType===t ? 'var(--forest-700)' : 'var(--forest-500)', fontSize:'0.7rem', fontWeight: mapType===t ? 900 : 700, cursor:'pointer', fontFamily:'inherit', transition:'background 0.15s', lineHeight:1.4}}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </>
             )}
           </div>
