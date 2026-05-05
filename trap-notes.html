@@ -190,6 +190,110 @@ function toServerRecord(local) {
   };
 }
 </script>
+<!-- ================================================================
+  SECTION 3: TrapDB — IndexedDB layer (Dexie)
+================================================================ -->
+<script>
+const TrapDB = (() => {
+  const db = new Dexie('yokoze-trap-notes');
+  db.version(1).stores({
+    traps: 'id, trapId, status, syncStatus, deletedAt, updatedAt'
+  });
+
+  async function getAll() {
+    const all = await db.traps.toArray();
+    return all.filter(t => !t.deletedAt && t.pendingOperation !== 'delete');
+  }
+
+  async function getById(id) {
+    return db.traps.get(id);
+  }
+
+  async function save(trap) {
+    const now = new Date().toISOString();
+    const existing = await db.traps.get(trap.id);
+    if (existing) {
+      const pendingOp = existing.pendingOperation === 'insert' ? 'insert' : 'update';
+      await db.traps.put({ ...existing, ...trap, updatedAt: now, syncStatus: 'pending', pendingOperation: pendingOp });
+    } else {
+      await db.traps.put({ ...trap, createdAt: trap.createdAt || now, updatedAt: now, syncStatus: 'pending', pendingOperation: 'insert' });
+    }
+  }
+
+  async function markDeleted(id, userId) {
+    const now = new Date().toISOString();
+    const t = await db.traps.get(id);
+    if (!t) return;
+    await db.traps.put({ ...t, deletedAt: now, deletedBy: userId, updatedAt: now, syncStatus: 'pending', pendingOperation: 'delete' });
+  }
+
+  async function markSynced(id) {
+    const t = await db.traps.get(id);
+    if (!t) return;
+    await db.traps.put({ ...t, syncStatus: 'synced', pendingOperation: null, lastSyncAt: new Date().toISOString() });
+  }
+
+  async function markFailed(id) {
+    const t = await db.traps.get(id);
+    if (!t) return;
+    await db.traps.put({ ...t, syncStatus: 'failed' });
+  }
+
+  async function getPending() {
+    return db.traps.where('syncStatus').equals('pending').toArray();
+  }
+
+  async function getSyncStats() {
+    const all = await db.traps.toArray();
+    return {
+      pending: all.filter(t => t.syncStatus === 'pending').length,
+      failed:  all.filter(t => t.syncStatus === 'failed').length,
+    };
+  }
+
+  async function seedFromServer(serverRecords) {
+    for (const rec of serverRecords) {
+      const existing = await db.traps.get(rec.id);
+      // pending レコードはサーバーで上書きしない（オフライン編集を保護）
+      if (existing && existing.syncStatus === 'pending') continue;
+      await db.traps.put(toLocalRecord(rec, existing));
+    }
+  }
+
+  async function retryFailed() {
+    const failed = await db.traps.where('syncStatus').equals('failed').toArray();
+    for (const t of failed) {
+      await db.traps.put({ ...t, syncStatus: 'pending' });
+    }
+  }
+
+  async function migrateFromLocalStorage() {
+    if (localStorage.getItem('yokose-migration-done')) return;
+    const count = await db.traps.count();
+    if (count > 0) { localStorage.setItem('yokose-migration-done', '1'); return; }
+    const raw = localStorage.getItem('yokose-v4');
+    if (!raw) { localStorage.setItem('yokose-migration-done', '1'); return; }
+    try {
+      const old = JSON.parse(raw);
+      const now = new Date().toISOString();
+      for (const t of old) {
+        await db.traps.put({
+          id: t.id || crypto.randomUUID(), trapId: t.trapId || 'A-000',
+          type: t.type || 'kukuri', status: t.status || '稼働中',
+          installedAt: t.installedAt || '', lat: t.lat || '', lng: t.lng || '',
+          notes: t.notes || '', sightings: t.sightings || [],
+          createdAt: t.createdAt || now, updatedAt: t.updatedAt || now,
+          createdBy: null, updatedBy: null, deletedAt: null, deletedBy: null,
+          syncStatus: 'pending', pendingOperation: 'insert', lastSyncAt: null,
+        });
+      }
+    } catch (e) { console.warn('[TrapDB] Migration failed:', e); }
+    localStorage.setItem('yokose-migration-done', '1');
+  }
+
+  return { getAll, getById, save, markDeleted, markSynced, markFailed, getPending, getSyncStats, seedFromServer, retryFailed, migrateFromLocalStorage };
+})();
+</script>
 <script type="text/babel" data-presets="react">
 const {useState, useEffect, useRef, useCallback} = React;
 
