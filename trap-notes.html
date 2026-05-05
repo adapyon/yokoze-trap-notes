@@ -648,7 +648,7 @@ function FilterBar({query, setQuery, filterSt, setFSt, filterTy, setFTy, mobile}
 }
 
 /* ── TrapCard ──────────────────────────────────────────────── */
-function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDetail, desktop}) {
+function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDetail, desktop, syncStatus}) {
   const tt = TRAP_TYPES[t.type];
   const st = TRAP_STATUS[t.status];
   const lastSight = t.sightings[t.sightings.length-1];
@@ -664,6 +664,8 @@ function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDeta
           <div style={{display:'flex', alignItems:'center', gap:7, flexWrap:'wrap', marginBottom:4}}>
             <span style={{fontWeight:900, fontSize:'1rem', color:'var(--forest-900)', fontFamily:"'JetBrains Mono', monospace", letterSpacing:'0.05em'}}>{t.trapId}</span>
             <span className="status-badge" style={{background:st.bg, color:st.text, borderColor:st.border}}>{STATUS_ICON[t.status]} {t.status}</span>
+            {syncStatus === 'pending' && <span style={{fontSize:'0.65rem', color:'#D97706'}} title="同期待ち">⏳</span>}
+            {syncStatus === 'failed'  && <span style={{fontSize:'0.65rem', color:'#DC2626'}} title="同期失敗">✗</span>}
           </div>
           <div style={{fontSize:'0.78rem', color:'var(--forest-600)', fontWeight:600, marginBottom:3}}>
             {tt.label}{t.notes ? ' · ' + t.notes.slice(0,24) : ''}
@@ -724,7 +726,8 @@ function TrapList({filtered, traps, openCardId, setOpenCardId, selId, onEdit, on
           onDel={() => onDel(t.id)}
           onFly={() => onFly(t)}
           onDetail={() => onDetail(t.id)}
-          desktop={desktop}/>
+          desktop={desktop}
+          syncStatus={t.syncStatus}/>
       ))}
     </div>
   );
