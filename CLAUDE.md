@@ -62,3 +62,66 @@ Sighting { id, timestamp, animal (shika/tanuki/araiguma/anaguma/other), notes }
 Pushed to GitHub: `https://github.com/adapyon/yokoze-trap-notes`
 
 The repo contains both `trap-notes.html` (the app) and the unused Vite scaffold in `src/` plus the `yokose-redesign/` subdirectory (another scaffold copy). Only `trap-notes.html` matters for the running application.
+
+---
+
+## オフライン同期対応（進行中）
+
+**ブランチ:** `feat/offline-sync`
+**仕様書:** `docs/superpowers/specs/2026-05-05-offline-sync-design.md`
+**実装計画:** `docs/superpowers/plans/2026-05-05-offline-sync.md`
+
+### 完了済みタスク
+
+| # | 内容 | コミット |
+|---|------|---------|
+| Task 1 | Supabase スキーマ移行（`deleted_at`, `deleted_by` カラム追加） | Supabase ダッシュボードで実施済み |
+| Task 2 | Dexie CDN 追加 + SECTION 2（定数・ユーティリティ）分離 | `30b2eba` |
+| Task 3 | SECTION 3 TrapDB（IndexedDB/Dexie 層）追加 | `e731b59` |
+
+### 残タスク（Task 4〜12）
+
+| # | 内容 |
+|---|------|
+| Task 4 | SECTION 4 TrapApi（Supabase ラッパー）+ sbClient 移管 + Root 認証書き換え |
+| Task 5 | SECTION 5 SyncService（同期オーケストレーター）+ `window._app` |
+| Task 6 | 初期データ読み込みを IndexedDB-first に変更 + `showToast` ヘルパー追加 |
+| Task 7 | `saveTrap` を TrapDB + SyncService 経由に変更 |
+| Task 8 | `deleteTrap` を論理削除に変更 |
+| Task 9 | `saveSighting` / `deleteSighting` を TrapDB 経由に変更 |
+| Task 10 | `useSyncState` hook + `SyncStatusBanner` コンポーネント追加 |
+| Task 11 | `TrapCard` に同期ステータスアイコン（⏳/✗）追加 |
+| Task 12 | GPS エラーハンドリング改善 |
+
+### 変更後のアーキテクチャ
+
+```
+SECTION 1: CDN タグ（Leaflet, Supabase, Dexie, React, Babel）
+SECTION 2: 定数・ユーティリティ（plain JS）— toLocalRecord, toServerRecord 含む
+SECTION 3: TrapDB — IndexedDB 層（Dexie IIFE）
+SECTION 4: TrapApi — Supabase 層（IIFE）          ← 未実装
+SECTION 5: SyncService + window._app（IIFE）       ← 未実装
+SECTION 6: React UI 層（<script type="text/babel">）
+```
+
+### 新データモデル（sync フィールド追加）
+
+```
+Trap {
+  id, trapId, type, status, installedAt, lat, lng, notes, sightings[],
+  createdAt, updatedAt, createdBy (uuid), updatedBy (uuid),
+  deletedAt (null = 未削除), deletedBy (uuid),
+  syncStatus: "synced" | "pending" | "failed",
+  pendingOperation: "insert" | "update" | "delete" | null,
+  lastSyncAt
+}
+```
+
+### 重要な実装方針
+
+- **削除:** 論理削除のみ（物理 DELETE 不使用）。`deletedAt` セット → `softDeleteTrap()` で Supabase UPDATE
+- **一覧:** `deleted_at IS NULL`（Supabase）/ `!deletedAt && pendingOperation !== 'delete'`（IndexedDB）
+- **競合解決:** last-write-wins（`updated_at` が新しい方を優先）
+- **pending 保護:** `seedFromServer` は `syncStatus === 'pending'` のレコードをサーバーで上書きしない
+- **グローバル:** `window._app = { db: TrapDB, api: TrapApi, sync: SyncService }`（Task 5 完了後）
+- **Supabase 認証:** Google OAuth + allowed_emails テーブル + RLS（Task 4 で sbClient を TrapApi に移管）
