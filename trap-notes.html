@@ -1031,6 +1031,10 @@ function App({session, onLogout}) {
   const [caching, setCaching]         = useState(false);
   const [locating, setLocating]       = useState(false);
   const [toast, setToast]             = useState('');
+  const showToast = useCallback((msg, ms) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), ms || 3500);
+  }, []);
   const [showCacheModal, setShowCacheModal] = useState(false);
   const [mapType, setMapType] = useState(() => localStorage.getItem('yokose-maptype') || 'gsi');
 
@@ -1041,14 +1045,34 @@ function App({session, onLogout}) {
   const locDotRef    = useRef(null);
   const locCircRef   = useRef(null);
   const locFlyDone   = useRef(false);
-  // Load traps from Supabase on mount
+  // IndexedDB-first load + background sync
   useEffect(() => {
-    sbClient.from('traps').select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', {ascending:false})
-      .then(({data, error}) => {
-        if (!error && data) setTraps(data.map(r => toLocalRecord(r)));
-      });
+    let mounted = true;
+    (async () => {
+      // 1. 移行（yokose-v4 → IndexedDB、初回のみ）
+      await TrapDB.migrateFromLocalStorage();
+
+      // 2. IndexedDB から即時表示
+      const local = await TrapDB.getAll();
+      if (mounted) setTraps(local);
+
+      // 3. イベント登録（trap-data-changed でデータを再読み込み）
+      const onDataChange = async () => {
+        const refreshed = await TrapDB.getAll();
+        if (mounted) setTraps(refreshed);
+      };
+      document.addEventListener('trap-data-changed', onDataChange);
+      SyncService.bindBrowserEvents();
+      SyncService.startPolling(30000);
+
+      // 4. オンラインなら Supabase と同期
+      if (navigator.onLine) {
+        await SyncService.fullSync();
+        const synced = await TrapDB.getAll();
+        if (mounted) setTraps(synced);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
