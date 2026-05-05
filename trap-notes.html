@@ -355,6 +355,97 @@ const TrapApi = (() => {
   return { getSession, getCurrentUser, signInWithGoogle, signOut, onAuthStateChange, checkAllowedEmail, fetchAll, upsertTrap, softDeleteTrap };
 })();
 </script>
+
+<!-- ================================================================
+  SECTION 5: SyncService — sync orchestrator
+================================================================ -->
+<script>
+const SyncService = (() => {
+  let _isSyncing  = false;
+  let _pollTimer  = null;
+  let _eventsSet  = false;
+
+  async function syncPending() {
+    const pending = await TrapDB.getPending();
+    let succeeded = 0, failed = 0;
+    const errors = [];
+    const user = await TrapApi.getCurrentUser();
+
+    for (const trap of pending) {
+      try {
+        if (trap.pendingOperation === 'delete') {
+          await TrapApi.softDeleteTrap(trap.id, trap.deletedAt, trap.deletedBy);
+        } else {
+          const rec = { ...trap };
+          if (user) {
+            rec.updatedBy = user.id;
+            if (trap.pendingOperation === 'insert') rec.createdBy = user.id;
+          }
+          await TrapApi.upsertTrap(rec);
+        }
+        await TrapDB.markSynced(trap.id);
+        succeeded++;
+      } catch (e) {
+        await TrapDB.markFailed(trap.id);
+        errors.push({ id: trap.id, error: e.message || String(e) });
+        failed++;
+      }
+    }
+    return { succeeded, failed, errors };
+  }
+
+  async function refreshFromServer() {
+    try {
+      const serverRecords = await TrapApi.fetchAll();
+      await TrapDB.seedFromServer(serverRecords);
+      document.dispatchEvent(new CustomEvent('trap-data-changed'));
+    } catch (e) {
+      console.warn('[SyncService] refreshFromServer failed:', e);
+    }
+  }
+
+  async function fullSync() {
+    if (_isSyncing) return;
+    _isSyncing = true;
+    document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: true } }));
+    try {
+      await syncPending();
+      await refreshFromServer();
+    } finally {
+      _isSyncing = false;
+      document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: false } }));
+    }
+  }
+
+  async function retryFailed() {
+    await TrapDB.retryFailed();
+    await fullSync();
+  }
+
+  function startPolling(ms) {
+    if (_pollTimer) return;
+    _pollTimer = setInterval(() => { if (navigator.onLine) fullSync(); }, ms || 30000);
+  }
+
+  function stopPolling() {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  }
+
+  function bindBrowserEvents() {
+    if (_eventsSet) return;
+    _eventsSet = true;
+    window.addEventListener('online', () => fullSync());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) fullSync();
+    });
+  }
+
+  return { syncPending, refreshFromServer, fullSync, retryFailed, startPolling, stopPolling, bindBrowserEvents };
+})();
+
+/* ---- グローバル公開（window._app のみ） ---- */
+window._app = { db: TrapDB, api: TrapApi, sync: SyncService };
+</script>
 <script type="text/babel" data-presets="react">
 const {useState, useEffect, useRef, useCallback} = React;
 
