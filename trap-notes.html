@@ -1190,34 +1190,70 @@ function App({session, onLogout}) {
   const saveTrap = useCallback(async () => {
     if (!draft || !draft.trapId.trim()) return;
     const now = new Date().toISOString();
-    const uid = session.user.id;
+    const user = await TrapApi.getCurrentUser();
+    const isOnline = navigator.onLine;
+
+    let trapToSave;
     if (editTrapId) {
-      const {error} = await sbClient.from('traps').update({
-        trap_id:draft.trapId, type:draft.type, status:draft.status,
-        installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
-        notes:draft.notes||'', updated_at:now
-      }).eq('id', editTrapId).eq('user_id', uid);
-      if (!error) setTraps(p => p.map(t => t.id===editTrapId ? {...t, ...draft, updatedAt:now} : t));
+      const existing = await TrapDB.getById(editTrapId);
+      trapToSave = {
+        ...(existing || {}),
+        ...draft,
+        id:        editTrapId,
+        updatedAt: now,
+        updatedBy: user ? user.id : null,
+      };
     } else {
-      const {data, error} = await sbClient.from('traps').insert({
-        trap_id:draft.trapId, type:draft.type, status:draft.status,
-        installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
-        notes:draft.notes||'', sightings:[], user_id:uid, created_at:now, updated_at:now
-      }).select().single();
-      if (!error && data) setTraps(p => [toLocalRecord(data), ...p]);
+      trapToSave = {
+        id:          crypto.randomUUID(),
+        trapId:      draft.trapId,
+        type:        draft.type,
+        status:      draft.status,
+        installedAt: draft.installedAt || '',
+        lat:         draft.lat  || '',
+        lng:         draft.lng  || '',
+        notes:       draft.notes || '',
+        sightings:   [],
+        createdAt:   now,
+        updatedAt:   now,
+        createdBy:   user ? user.id : null,
+        updatedBy:   user ? user.id : null,
+        deletedAt:   null,
+        deletedBy:   null,
+      };
     }
+
+    await TrapDB.save(trapToSave);
+    setTraps(await TrapDB.getAll());
     setSF(false); setDraft(null);
-  }, [draft, editTrapId, session]);
+
+    if (isOnline) {
+      await SyncService.fullSync();
+      setTraps(await TrapDB.getAll());
+      showToast(editTrapId ? '更新して同期しました' : '登録して同期しました');
+    } else {
+      showToast(editTrapId ? 'オフラインで更新しました。通信回復後に同期します' : 'オフラインで登録しました。通信回復後に同期します');
+    }
+  }, [draft, editTrapId, showToast]);
 
   const deleteTrap = useCallback(async (id) => {
-    const {error} = await sbClient.from('traps').delete().eq('id', id).eq('user_id', session.user.id);
-    if (!error) {
-      setTraps(p => p.filter(t => t.id!==id));
-      setDelId(null);
-      if (detailId===id) setDetailId(null);
-      if (selId===id) setSelId(null);
+    const user = await TrapApi.getCurrentUser();
+    const isOnline = navigator.onLine;
+
+    await TrapDB.markDeleted(id, user ? user.id : null);
+    setTraps(await TrapDB.getAll());
+    setDelId(null);
+    if (detailId === id) setDetailId(null);
+    if (selId === id) setSelId(null);
+
+    if (isOnline) {
+      await SyncService.fullSync();
+      setTraps(await TrapDB.getAll());
+      showToast('削除して同期しました');
+    } else {
+      showToast('オフラインで削除登録しました。通信回復後に同期します');
     }
-  }, [detailId, selId, session]);
+  }, [detailId, selId, showToast]);
 
   const openNewSighting = useCallback(() => {
     setSDraft({timestamp:new Date().toISOString().slice(0,16), animal:'shika', notes:''});
