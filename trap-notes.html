@@ -1363,14 +1363,30 @@ function App({session, onLogout}) {
   }, []);
 
   const getGPS = useCallback(() => {
-    if (!navigator.geolocation) { setGpsErr('GPSに対応していません'); return; }
+    if (!navigator.geolocation) {
+      setGpsErr('このデバイスはGPSに対応していません');
+      return;
+    }
     setGpsLd(true); setGpsErr('');
     navigator.geolocation.getCurrentPosition(
-      pos => { setDraft(d => d ? {...d, lat:pos.coords.latitude.toFixed(6), lng:pos.coords.longitude.toFixed(6)} : d); setGpsLd(false); },
-      () => { setGpsErr('GPS取得失敗。屋外で再試行してください'); setGpsLd(false); },
+      pos => {
+        setDraft(d => d ? {...d, lat:pos.coords.latitude.toFixed(6), lng:pos.coords.longitude.toFixed(6)} : d);
+        setGpsLd(false);
+      },
+      (err) => {
+        setGpsLd(false);
+        if (err.code === 1) {
+          setGpsErr('位置情報の使用が拒否されています。ブラウザの設定を確認してください');
+        } else if (err.code === 3) {
+          setGpsErr('GPS取得がタイムアウトしました。屋外で再試行してください');
+        } else {
+          setGpsErr('GPS取得に失敗しました。手動で入力してください');
+        }
+        showToast('GPS取得に失敗しました。手動で入力してください', 5000);
+      },
       {enableHighAccuracy:true, timeout:15000}
     );
-  }, []);
+  }, [showToast]);
 
   const startPick = useCallback(() => { setSF(false); setPicking(true); setMobTab('map'); }, []);
   const confirmPick = useCallback(() => {
