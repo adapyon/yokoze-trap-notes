@@ -558,6 +558,73 @@ const makePopup = (t) => {
 
 const labelSt = {display:'block', fontSize:'0.8rem', fontWeight:800, color:'var(--forest-500)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8};
 
+/* ── useSyncState ─────────────────────────────────────────────── */
+function useSyncState() {
+  const [stats, setStats]     = React.useState({pending:0, failed:0});
+  const [syncing, setSyncing] = React.useState(false);
+  const [lastSync, setLastSync] = React.useState(null);
+
+  const refresh = React.useCallback(async () => {
+    const s = await TrapDB.getSyncStats();
+    setStats(s);
+    setLastSync(new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'}));
+  }, []);
+
+  React.useEffect(() => {
+    const onStateChange = (e) => {
+      setSyncing(e.detail.syncing);
+      if (!e.detail.syncing) refresh();
+    };
+    const onDataChange = () => refresh();
+    document.addEventListener('sync-state-change', onStateChange);
+    document.addEventListener('trap-data-changed', onDataChange);
+    refresh();
+    return () => {
+      document.removeEventListener('sync-state-change', onStateChange);
+      document.removeEventListener('trap-data-changed', onDataChange);
+    };
+  }, [refresh]);
+
+  return { pending: stats.pending, failed: stats.failed, syncing, lastSync };
+}
+
+/* ── SyncStatusBanner ─────────────────────────────────────────── */
+function SyncStatusBanner({onRetry}) {
+  const { pending, failed, syncing, lastSync } = useSyncState();
+  const isOffline = !navigator.onLine;
+
+  if (syncing) {
+    return (
+      <div style={{background:'#EFF6FF', color:'#1D4ED8', fontSize:'0.72rem', fontWeight:800, padding:'5px 12px', textAlign:'center', borderBottom:'1px solid #BFDBFE', flexShrink:0}}>
+        ⏳ 同期中...
+      </div>
+    );
+  }
+  if (failed > 0) {
+    return (
+      <div onClick={onRetry} style={{background:'#FEF2F2', color:'#DC2626', fontSize:'0.72rem', fontWeight:800, padding:'5px 12px', textAlign:'center', borderBottom:'1px solid #FECACA', flexShrink:0, cursor:'pointer'}}>
+        ✗ {failed}件 送信失敗 — タップして再試行
+      </div>
+    );
+  }
+  if (pending > 0) {
+    return (
+      <div style={{background:'#FFFBEB', color:'#92400E', fontSize:'0.72rem', fontWeight:800, padding:'5px 12px', textAlign:'center', borderBottom:'1px solid #FDE68A', flexShrink:0}}>
+        ⏳ {pending}件 送信待ち
+      </div>
+    );
+  }
+  if (isOffline) return null;
+  if (lastSync) {
+    return (
+      <div style={{background:'white', color:'#94A3B8', fontSize:'0.68rem', fontWeight:700, padding:'3px 12px', textAlign:'center', borderBottom:'1px solid var(--forest-100)', flexShrink:0}}>
+        最終同期: {lastSync}
+      </div>
+    );
+  }
+  return null;
+}
+
 /* ── FilterBar ─────────────────────────────────────────────── */
 function FilterBar({query, setQuery, filterSt, setFSt, filterTy, setFTy, mobile}) {
   const h = mobile ? '2.875rem' : '2.125rem';
@@ -1364,6 +1431,7 @@ function App({session, onLogout}) {
   return (
     <div style={{height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--parchment)'}}>
       {offline && <div className="offline-bar">📡 オフラインモード — キャッシュデータを表示中</div>}
+      <SyncStatusBanner onRetry={() => SyncService.retryFailed().then(async () => setTraps(await TrapDB.getAll()))} />
 
       <header style={{background:'linear-gradient(135deg,var(--forest-900) 0%,var(--forest-700) 100%)', color:'white', padding:'8px 16px 8px', flexShrink:0}}>
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
