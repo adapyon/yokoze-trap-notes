@@ -294,38 +294,69 @@ const TrapDB = (() => {
   return { getAll, getById, save, markDeleted, markSynced, markFailed, getPending, getSyncStats, seedFromServer, retryFailed, migrateFromLocalStorage };
 })();
 </script>
+<!-- ================================================================
+  SECTION 4: TrapApi — Supabase layer
+================================================================ -->
+<script>
+const TrapApi = (() => {
+  const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  async function getSession() {
+    const { data } = await client.auth.getSession();
+    return data.session;
+  }
+
+  async function getCurrentUser() {
+    const sess = await getSession();
+    if (!sess) return null;
+    return { id: sess.user.id, email: sess.user.email };
+  }
+
+  async function signInWithGoogle() {
+    const url = window.location.href.split('?')[0].split('#')[0];
+    await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: url } });
+  }
+
+  async function signOut() {
+    await client.auth.signOut();
+  }
+
+  function onAuthStateChange(callback) {
+    const { data: { subscription } } = client.auth.onAuthStateChange(callback);
+    return subscription;
+  }
+
+  async function checkAllowedEmail(email) {
+    const { data } = await client.from('allowed_emails').select('email').eq('email', email).maybeSingle();
+    return !!data;
+  }
+
+  async function fetchAll() {
+    const { data, error } = await client.from('traps')
+      .select('*')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function upsertTrap(local) {
+    const { error } = await client.from('traps').upsert(toServerRecord(local), { onConflict: 'id' });
+    if (error) throw error;
+  }
+
+  async function softDeleteTrap(id, deletedAt, deletedBy) {
+    const { error } = await client.from('traps')
+      .update({ deleted_at: deletedAt, deleted_by: deletedBy, updated_at: deletedAt })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  return { getSession, getCurrentUser, signInWithGoogle, signOut, onAuthStateChange, checkAllowedEmail, fetchAll, upsertTrap, softDeleteTrap };
+})();
+</script>
 <script type="text/babel" data-presets="react">
 const {useState, useEffect, useRef, useCallback} = React;
-
-/* ── Supabase ──────────────────────────────────────────────── */
-const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-/*
-  Required Supabase SQL (run once in SQL Editor):
-
-  CREATE TABLE traps (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    trap_id      TEXT NOT NULL,
-    type         TEXT NOT NULL DEFAULT 'kukuri',
-    status       TEXT NOT NULL DEFAULT '稼働中',
-    installed_at TEXT,
-    lat          TEXT,
-    lng          TEXT,
-    notes        TEXT DEFAULT '',
-    sightings    JSONB NOT NULL DEFAULT '[]',
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  ALTER TABLE traps ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "own traps" ON traps FOR ALL
-    USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-  CREATE TABLE allowed_emails (email TEXT PRIMARY KEY);
-  ALTER TABLE allowed_emails ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "check own email" ON allowed_emails FOR SELECT
-    USING (email = auth.email());
-*/
 
 /* ── Constants ─────────────────────────────────────────────── */
 const TILE_CACHE = 'gsi-v2';
@@ -1358,9 +1389,9 @@ function Root() {
   useEffect(() => {
     const checkAllowed = async (sess) => {
       if (!sess) { setAuthLoading(false); setAuthSession(null); return; }
-      const {data} = await sbClient.from('allowed_emails').select('email').eq('email', sess.user.email).maybeSingle();
-      if (!data) {
-        await sbClient.auth.signOut();
+      const allowed = await TrapApi.checkAllowedEmail(sess.user.email);
+      if (!allowed) {
+        await TrapApi.signOut();
         setAuthError('このアカウントはアクセスが許可されていません。管理者に連絡してください。');
         setAuthLoading(false);
         setAuthSession(null);
@@ -1371,7 +1402,7 @@ function Root() {
       }
     };
 
-    const {data:{subscription}} = sbClient.auth.onAuthStateChange((event, sess) => {
+    const sub = TrapApi.onAuthStateChange((event, sess) => {
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
         checkAllowed(sess);
       } else if (event === 'SIGNED_OUT') {
@@ -1381,16 +1412,15 @@ function Root() {
         setAuthSession(sess);
       }
     });
-    return () => subscription.unsubscribe();
+    return () => sub.unsubscribe();
   }, []);
 
   const handleLogin = useCallback(async () => {
-    const url = window.location.href.split('?')[0].split('#')[0];
-    await sbClient.auth.signInWithOAuth({provider:'google', options:{redirectTo:url}});
+    await TrapApi.signInWithGoogle();
   }, []);
 
   const handleLogout = useCallback(async () => {
-    await sbClient.auth.signOut();
+    await TrapApi.signOut();
   }, []);
 
   if (authLoading) return React.createElement(LoadingScreen);
