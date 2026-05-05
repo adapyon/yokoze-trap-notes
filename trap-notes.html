@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -102,12 +103,97 @@ textarea.field-input{height:auto;padding:.875rem 1rem;resize:none;line-height:1.
 </head>
 <body>
 <div id="root"></div>
+<!-- ================================================================
+  SECTION 2: Constants & Utilities (plain JS)
+================================================================ -->
+<script>
+/* ---- Supabase 接続情報 ---- */
+const SUPABASE_URL      = 'https://ykojblrieeirgbxxurwh.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_40xB7vnxMkqTSywczaIA7g_Xol4pHbs';
+
+/* ---- 罠種類・ステータス定数 ---- */
+const TRAP_TYPES = {
+  kukuri: {emoji:'🪤', label:'くくり罠', color:'#1B5E3B'},
+  hako:   {emoji:'📦', label:'はこ罠',   color:'#7B4E28'},
+  other:  {emoji:'❓', label:'その他',   color:'#6B7280'},
+};
+const TRAP_STATUS = {
+  '稼働中':   {bg:'#D1FAE5', text:'#065F46', border:'#6EE7B7'},
+  '要確認':   {bg:'#FEF3C7', text:'#92400E', border:'#FCD34D'},
+  '撤去済み': {bg:'#F1F5F9', text:'#475569', border:'#CBD5E1'},
+};
+const STATUS_ICON = {'稼働中':'🟢','要確認':'🟡','撤去済み':'⚫'};
+const ANIMALS = [
+  {id:'shika',    emoji:'🦌', label:'シカ'},
+  {id:'tanuki',   emoji:'🦝', label:'タヌキ'},
+  {id:'araiguma', emoji:'🦝', label:'アライグマ'},
+  {id:'anaguma',  emoji:'🦡', label:'アナグマ'},
+  {id:'other',    emoji:'🐾', label:'その他'},
+];
+const AMAP = Object.fromEntries(ANIMALS.map(a => [a.id, a]));
+
+/* ---- ユーティリティ ---- */
+function nextTrapId(traps) {
+  const nums = traps.map(t => { const m = t.trapId.match(/^A-(\d+)$/); return m ? +m[1] : 0; });
+  return 'A-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s + 'T00:00:00');
+  return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+}
+function fmtDT(s) {
+  if (!s) return '—';
+  return new Date(s).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+
+/* ---- Supabase ↔ ローカルモデル変換 ---- */
+function toLocalRecord(server, existing) {
+  return {
+    id:               server.id,
+    trapId:           server.trap_id,
+    type:             server.type,
+    status:           server.status,
+    installedAt:      server.installed_at  || '',
+    lat:              server.lat           || '',
+    lng:              server.lng           || '',
+    notes:            server.notes         || '',
+    sightings:        server.sightings     || [],
+    createdAt:        server.created_at,
+    updatedAt:        server.updated_at,
+    createdBy:        server.created_by    || null,
+    updatedBy:        server.updated_by    || null,
+    deletedAt:        server.deleted_at    || null,
+    deletedBy:        server.deleted_by    || null,
+    syncStatus:       (existing && existing.syncStatus === 'pending') ? 'pending' : 'synced',
+    pendingOperation: (existing && existing.syncStatus === 'pending') ? existing.pendingOperation : null,
+    lastSyncAt:       new Date().toISOString(),
+  };
+}
+function toServerRecord(local) {
+  return {
+    id:           local.id,
+    trap_id:      local.trapId,
+    type:         local.type,
+    status:       local.status,
+    installed_at: local.installedAt || null,
+    lat:          local.lat         || null,
+    lng:          local.lng         || null,
+    notes:        local.notes       || '',
+    sightings:    local.sightings,
+    created_at:   local.createdAt,
+    updated_at:   local.updatedAt,
+    created_by:   local.createdBy,
+    updated_by:   local.updatedBy,
+    deleted_at:   local.deletedAt,
+    deleted_by:   local.deletedBy,
+  };
+}
+</script>
 <script type="text/babel" data-presets="react">
 const {useState, useEffect, useRef, useCallback} = React;
 
 /* ── Supabase ──────────────────────────────────────────────── */
-const SUPABASE_URL = 'https://ykojblrieeirgbxxurwh.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_40xB7vnxMkqTSywczaIA7g_Xol4pHbs';
 const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /*
@@ -141,60 +227,6 @@ const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TILE_CACHE = 'gsi-v2';
 const CENTER = [35.9722871, 139.165769];
 const ZOOM0 = 15;
-
-const TRAP_TYPES = {
-  kukuri: {emoji:'🪤', label:'くくり罠', color:'#1B5E3B'},
-  hako:   {emoji:'📦', label:'はこ罠',   color:'#7B4E28'},
-  other:  {emoji:'❓', label:'その他',   color:'#6B7280'},
-};
-
-const TRAP_STATUS = {
-  '稼働中':  {bg:'#D1FAE5', text:'#065F46', border:'#6EE7B7'},
-  '要確認':  {bg:'#FEF3C7', text:'#92400E', border:'#FCD34D'},
-  '撤去済み':{bg:'#F1F5F9', text:'#475569', border:'#CBD5E1'},
-};
-
-const STATUS_ICON = {'稼働中':'🟢','要確認':'🟡','撤去済み':'⚫'};
-
-const ANIMALS = [
-  {id:'shika',    emoji:'🦌', label:'シカ'},
-  {id:'tanuki',   emoji:'🦝', label:'タヌキ'},
-  {id:'araiguma', emoji:'🦝', label:'アライグマ'},
-  {id:'anaguma',  emoji:'🦡', label:'アナグマ'},
-  {id:'other',    emoji:'🐾', label:'その他'},
-];
-const AMAP = Object.fromEntries(ANIMALS.map(a => [a.id, a]));
-
-/* ── DB ↔ App conversion ───────────────────────────────────── */
-const dbToTrap = (row) => ({
-  id:          row.id,
-  trapId:      row.trap_id,
-  type:        row.type,
-  status:      row.status,
-  installedAt: row.installed_at || '',
-  lat:         row.lat  || '',
-  lng:         row.lng  || '',
-  notes:       row.notes || '',
-  sightings:   row.sightings || [],
-  createdAt:   row.created_at,
-  updatedAt:   row.updated_at,
-});
-
-const nextTrapId = (traps) => {
-  const nums = traps.map(t => { const m = t.trapId.match(/^A-(\d+)$/); return m ? +m[1] : 0; });
-  return 'A-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3,'0');
-};
-
-const fmtDate = (s) => {
-  if (!s) return '—';
-  const d = new Date(s + 'T00:00:00');
-  return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
-};
-
-const fmtDT = (s) => {
-  if (!s) return '—';
-  return new Date(s).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
-};
 
 /* ── Offline tile cache ────────────────────────────────────── */
 const OFFLINE_SVG = 'data:image/svg+xml,' + encodeURIComponent(
@@ -789,7 +821,7 @@ function App({session, onLogout}) {
       .eq('user_id', session.user.id)
       .order('created_at', {ascending:false})
       .then(({data, error}) => {
-        if (!error && data) setTraps(data.map(dbToTrap));
+        if (!error && data) setTraps(data.map(r => toLocalRecord(r)));
       });
   }, []);
 
@@ -922,7 +954,7 @@ function App({session, onLogout}) {
         installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
         notes:draft.notes||'', sightings:[], user_id:uid, created_at:now, updated_at:now
       }).select().single();
-      if (!error && data) setTraps(p => [dbToTrap(data), ...p]);
+      if (!error && data) setTraps(p => [toLocalRecord(data), ...p]);
     }
     setSF(false); setDraft(null);
   }, [draft, editTrapId, session]);
