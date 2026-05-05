@@ -1262,24 +1262,35 @@ function App({session, onLogout}) {
 
   const saveSighting = useCallback(async () => {
     if (!sDraft || !detailId) return;
-    const sighting = {id:crypto.randomUUID(), ...sDraft};
-    const trap = traps.find(t => t.id===detailId);
+    const trap = await TrapDB.getById(detailId);
     if (!trap) return;
-    const newSightings = [...trap.sightings, sighting];
+    const user = await TrapApi.getCurrentUser();
     const now = new Date().toISOString();
-    const {error} = await sbClient.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', detailId).eq('user_id', session.user.id);
-    if (!error) setTraps(p => p.map(t => t.id===detailId ? {...t, sightings:newSightings, updatedAt:now} : t));
+    await TrapDB.save({
+      ...trap,
+      sightings: [...trap.sightings, { id: crypto.randomUUID(), ...sDraft }],
+      updatedAt: now,
+      updatedBy: user ? user.id : null,
+    });
+    setTraps(await TrapDB.getAll());
     setSSF(false); setSDraft(null);
-  }, [sDraft, detailId, traps, session]);
+    if (navigator.onLine) { await SyncService.fullSync(); setTraps(await TrapDB.getAll()); }
+  }, [sDraft, detailId]);
 
   const deleteSighting = useCallback(async (trapId, sightingId) => {
-    const trap = traps.find(t => t.id===trapId);
+    const trap = await TrapDB.getById(trapId);
     if (!trap) return;
-    const newSightings = trap.sightings.filter(s => s.id!==sightingId);
+    const user = await TrapApi.getCurrentUser();
     const now = new Date().toISOString();
-    const {error} = await sbClient.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', trapId).eq('user_id', session.user.id);
-    if (!error) setTraps(p => p.map(t => t.id===trapId ? {...t, sightings:newSightings, updatedAt:now} : t));
-  }, [traps, session]);
+    await TrapDB.save({
+      ...trap,
+      sightings: trap.sightings.filter(s => s.id !== sightingId),
+      updatedAt: now,
+      updatedBy: user ? user.id : null,
+    });
+    setTraps(await TrapDB.getAll());
+    if (navigator.onLine) { await SyncService.fullSync(); setTraps(await TrapDB.getAll()); }
+  }, []);
 
   const getGPS = useCallback(() => {
     if (!navigator.geolocation) { setGpsErr('GPSに対応していません'); return; }
