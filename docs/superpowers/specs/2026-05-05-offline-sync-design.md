@@ -211,10 +211,18 @@ db.version(1).stores({
 **seedFromServer の競合ルール:**
 ```
 ① ローカルに同一 id の pending レコードがある → スキップ（ローカル優先）
+   ※ pendingOperation が "delete" のレコードも対象（pending delete 中は上書きしない）
+
 ② ローカルに同一 id があり pending でない   → サーバー値で上書き
+
 ③ ローカルに存在しない                      → 新規追加
+
 ④ サーバーの deleted_at が非 null           → IndexedDB に保存するが getAll() から除外
 ```
+
+**一覧表示の除外条件（getAll のフィルタ）:**
+- `deletedAt != null` のレコードは表示しない（サーバー由来の論理削除済み）
+- `pendingOperation === "delete"` のレコードも表示しない（オフライン削除待ち）
 
 ---
 
@@ -252,7 +260,25 @@ db.version(1).stores({
 **failed レコードの扱い:**
 - `syncPending()` は `syncStatus === "pending"` のレコードのみを対象にする
 - `syncStatus === "failed"` のレコードは自動再試行しない
-- 手動再試行: SyncStatusBanner の「タップして再試行」を押すと `failed` を `pending` に戻してから `fullSync()` を実行する
+- 手動再試行: SyncStatusBanner の「タップして再試行」を押すと **全件の `failed` を `pending` に戻してから** `fullSync()` を実行する（個別再試行は今回対象外）
+
+**fullSync() の二重起動防止:**
+```js
+// SyncService 内部にフラグを持つ
+let _isSyncing = false;
+
+async function fullSync() {
+  if (_isSyncing) return;   // 実行中は即リターン
+  _isSyncing = true;
+  try {
+    await syncPending();
+    await refreshFromServer();
+  } finally {
+    _isSyncing = false;     // 成功・失敗どちらでも解放
+  }
+}
+```
+polling / online / visibilitychange / 操作直後が重なっても同時実行しない。
 
 ---
 
@@ -348,16 +374,31 @@ db.version(1).stores({
 
 ## 8. 既存データ移行
 
+**実行条件:**
 ```
-条件: IndexedDB が空 かつ localStorage に yokose-v4 が存在する場合
+実行する: IndexedDB の traps テーブルが空
+         かつ localStorage に yokose-v4 が存在する場合
 
-処理:
-  1. yokose-v4 の全レコードを読み込む
-  2. syncStatus: "pending", pendingOperation: "insert" で IndexedDB に投入
-  3. 起動後の自動同期（fullSync）で Supabase へアップロード
-  4. 同期成功後に localStorage を削除
+スキップする: IndexedDB に 1件以上データがある場合（移行済みとみなす）
+```
 
-条件: IndexedDB にデータあり → 移行済みとみなし何もしない
+**移行済みフラグの持ち方:**
+- `localStorage` キー `yokose-migration-done` に `"1"` を保存する
+- 移行処理の冒頭でこのフラグを確認し、存在すれば即リターン
+- IndexedDB のレコード数チェックと二重にガードすることで、
+  万一 IndexedDB がクリアされた場合の再移行を防ぐ
+
+**処理手順:**
+```
+1. yokose-migration-done が localStorage にあればスキップ
+2. yokose-v4 の全レコードを読み込む
+3. 各レコードを以下の初期値で IndexedDB に投入:
+   syncStatus: "pending", pendingOperation: "insert"
+   createdBy / updatedBy: null（既存データには uid 情報なし）
+4. localStorage に yokose-migration-done = "1" をセット
+5. 起動後の fullSync() でレコードを Supabase へアップロード
+6. 全件 syncStatus: "synced" になった後、
+   localStorage の yokose-v4 キーを削除（任意、移行後にユーザーが確認してから削除も可）
 ```
 
 ---
