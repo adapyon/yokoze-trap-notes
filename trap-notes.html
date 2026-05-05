@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -102,60 +103,26 @@ textarea.field-input{height:auto;padding:.875rem 1rem;resize:none;line-height:1.
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-presets="react">
-const {useState, useEffect, useRef, useCallback} = React;
-
-/* ── Supabase ──────────────────────────────────────────────── */
-const SUPABASE_URL = 'https://ykojblrieeirgbxxurwh.supabase.co';
+<!-- ================================================================
+  SECTION 2: Constants & Utilities (plain JS)
+================================================================ -->
+<script>
+/* ---- Supabase 接続情報 ---- */
+const SUPABASE_URL      = 'https://ykojblrieeirgbxxurwh.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_40xB7vnxMkqTSywczaIA7g_Xol4pHbs';
-const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/*
-  Required Supabase SQL (run once in SQL Editor):
-
-  CREATE TABLE traps (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    trap_id      TEXT NOT NULL,
-    type         TEXT NOT NULL DEFAULT 'kukuri',
-    status       TEXT NOT NULL DEFAULT '稼働中',
-    installed_at TEXT,
-    lat          TEXT,
-    lng          TEXT,
-    notes        TEXT DEFAULT '',
-    sightings    JSONB NOT NULL DEFAULT '[]',
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  ALTER TABLE traps ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "own traps" ON traps FOR ALL
-    USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
-
-  CREATE TABLE allowed_emails (email TEXT PRIMARY KEY);
-  ALTER TABLE allowed_emails ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "check own email" ON allowed_emails FOR SELECT
-    USING (email = auth.email());
-*/
-
-/* ── Constants ─────────────────────────────────────────────── */
-const TILE_CACHE = 'gsi-v2';
-const CENTER = [35.9722871, 139.165769];
-const ZOOM0 = 15;
-
+/* ---- 罠種類・ステータス定数 ---- */
 const TRAP_TYPES = {
   kukuri: {emoji:'🪤', label:'くくり罠', color:'#1B5E3B'},
   hako:   {emoji:'📦', label:'はこ罠',   color:'#7B4E28'},
   other:  {emoji:'❓', label:'その他',   color:'#6B7280'},
 };
-
 const TRAP_STATUS = {
-  '稼働中':  {bg:'#D1FAE5', text:'#065F46', border:'#6EE7B7'},
-  '要確認':  {bg:'#FEF3C7', text:'#92400E', border:'#FCD34D'},
-  '撤去済み':{bg:'#F1F5F9', text:'#475569', border:'#CBD5E1'},
+  '稼働中':   {bg:'#D1FAE5', text:'#065F46', border:'#6EE7B7'},
+  '要確認':   {bg:'#FEF3C7', text:'#92400E', border:'#FCD34D'},
+  '撤去済み': {bg:'#F1F5F9', text:'#475569', border:'#CBD5E1'},
 };
-
 const STATUS_ICON = {'稼働中':'🟢','要確認':'🟡','撤去済み':'⚫'};
-
 const ANIMALS = [
   {id:'shika',    emoji:'🦌', label:'シカ'},
   {id:'tanuki',   emoji:'🦝', label:'タヌキ'},
@@ -165,36 +132,327 @@ const ANIMALS = [
 ];
 const AMAP = Object.fromEntries(ANIMALS.map(a => [a.id, a]));
 
-/* ── DB ↔ App conversion ───────────────────────────────────── */
-const dbToTrap = (row) => ({
-  id:          row.id,
-  trapId:      row.trap_id,
-  type:        row.type,
-  status:      row.status,
-  installedAt: row.installed_at || '',
-  lat:         row.lat  || '',
-  lng:         row.lng  || '',
-  notes:       row.notes || '',
-  sightings:   row.sightings || [],
-  createdAt:   row.created_at,
-  updatedAt:   row.updated_at,
-});
-
-const nextTrapId = (traps) => {
+/* ---- ユーティリティ ---- */
+function nextTrapId(traps) {
   const nums = traps.map(t => { const m = t.trapId.match(/^A-(\d+)$/); return m ? +m[1] : 0; });
-  return 'A-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3,'0');
-};
-
-const fmtDate = (s) => {
+  return 'A-' + String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, '0');
+}
+function fmtDate(s) {
   if (!s) return '—';
   const d = new Date(s + 'T00:00:00');
   return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
-};
-
-const fmtDT = (s) => {
+}
+function fmtDT(s) {
   if (!s) return '—';
   return new Date(s).toLocaleString('ja-JP', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
-};
+}
+
+/* ---- Supabase ↔ ローカルモデル変換 ---- */
+function toLocalRecord(server, existing) {
+  return {
+    id:               server.id,
+    trapId:           server.trap_id,
+    type:             server.type,
+    status:           server.status,
+    installedAt:      server.installed_at  || '',
+    lat:              server.lat           || '',
+    lng:              server.lng           || '',
+    notes:            server.notes         || '',
+    sightings:        server.sightings     || [],
+    createdAt:        server.created_at,
+    updatedAt:        server.updated_at,
+    createdBy:        server.created_by    || null,
+    updatedBy:        server.updated_by    || null,
+    deletedAt:        server.deleted_at    || null,
+    deletedBy:        server.deleted_by    || null,
+    syncStatus:       (existing && existing.syncStatus === 'pending') ? 'pending' : 'synced',
+    pendingOperation: (existing && existing.syncStatus === 'pending') ? existing.pendingOperation : null,
+    lastSyncAt:       new Date().toISOString(),
+  };
+}
+function toServerRecord(local) {
+  return {
+    id:           local.id,
+    trap_id:      local.trapId,
+    type:         local.type,
+    status:       local.status,
+    installed_at: local.installedAt || null,
+    lat:          local.lat         || null,
+    lng:          local.lng         || null,
+    notes:        local.notes       || '',
+    sightings:    local.sightings,
+    created_at:   local.createdAt,
+    updated_at:   local.updatedAt,
+    created_by:   local.createdBy,
+    updated_by:   local.updatedBy,
+    deleted_at:   local.deletedAt,
+    deleted_by:   local.deletedBy,
+  };
+}
+</script>
+<!-- ================================================================
+  SECTION 3: TrapDB — IndexedDB layer (Dexie)
+================================================================ -->
+<script>
+const TrapDB = (() => {
+  const db = new Dexie('yokoze-trap-notes');
+  db.version(1).stores({
+    traps: 'id, trapId, status, syncStatus, deletedAt, updatedAt'
+  });
+
+  async function getAll() {
+    const all = await db.traps.toArray();
+    return all.filter(t => !t.deletedAt && t.pendingOperation !== 'delete');
+  }
+
+  async function getById(id) {
+    return db.traps.get(id);
+  }
+
+  async function save(trap) {
+    const now = new Date().toISOString();
+    const existing = await db.traps.get(trap.id);
+    if (existing) {
+      const pendingOp = existing.pendingOperation === 'insert' ? 'insert' : 'update';
+      await db.traps.put({ ...existing, ...trap, updatedAt: now, syncStatus: 'pending', pendingOperation: pendingOp });
+    } else {
+      await db.traps.put({ ...trap, createdAt: trap.createdAt || now, updatedAt: now, syncStatus: 'pending', pendingOperation: 'insert' });
+    }
+  }
+
+  async function markDeleted(id, userId) {
+    const now = new Date().toISOString();
+    const t = await db.traps.get(id);
+    if (!t) return;
+    await db.traps.put({ ...t, deletedAt: now, deletedBy: userId, updatedAt: now, syncStatus: 'pending', pendingOperation: 'delete' });
+  }
+
+  async function markSynced(id) {
+    const t = await db.traps.get(id);
+    if (!t) return;
+    await db.traps.put({ ...t, syncStatus: 'synced', pendingOperation: null, lastSyncAt: new Date().toISOString() });
+  }
+
+  async function markFailed(id) {
+    const t = await db.traps.get(id);
+    if (!t) return;
+    await db.traps.put({ ...t, syncStatus: 'failed' });
+  }
+
+  async function getPending() {
+    return db.traps.where('syncStatus').equals('pending').toArray();
+  }
+
+  async function getSyncStats() {
+    const all = await db.traps.toArray();
+    return {
+      pending: all.filter(t => t.syncStatus === 'pending').length,
+      failed:  all.filter(t => t.syncStatus === 'failed').length,
+    };
+  }
+
+  async function seedFromServer(serverRecords) {
+    for (const rec of serverRecords) {
+      const existing = await db.traps.get(rec.id);
+      // pending レコードはサーバーで上書きしない（オフライン編集を保護）
+      if (existing && existing.syncStatus === 'pending') continue;
+      await db.traps.put(toLocalRecord(rec, existing));
+    }
+  }
+
+  async function retryFailed() {
+    const failed = await db.traps.where('syncStatus').equals('failed').toArray();
+    for (const t of failed) {
+      await db.traps.put({ ...t, syncStatus: 'pending' });
+    }
+  }
+
+  async function migrateFromLocalStorage() {
+    if (localStorage.getItem('yokose-migration-done')) return;
+    const count = await db.traps.count();
+    if (count > 0) { localStorage.setItem('yokose-migration-done', '1'); return; }
+    const raw = localStorage.getItem('yokose-v4');
+    if (!raw) { localStorage.setItem('yokose-migration-done', '1'); return; }
+    try {
+      const old = JSON.parse(raw);
+      const now = new Date().toISOString();
+      for (const t of old) {
+        await db.traps.put({
+          id: t.id || crypto.randomUUID(), trapId: t.trapId || 'A-000',
+          type: t.type || 'kukuri', status: t.status || '稼働中',
+          installedAt: t.installedAt || '', lat: t.lat || '', lng: t.lng || '',
+          notes: t.notes || '', sightings: t.sightings || [],
+          createdAt: t.createdAt || now, updatedAt: t.updatedAt || now,
+          createdBy: null, updatedBy: null, deletedAt: null, deletedBy: null,
+          syncStatus: 'pending', pendingOperation: 'insert', lastSyncAt: null,
+        });
+      }
+    } catch (e) { console.warn('[TrapDB] Migration failed:', e); }
+    localStorage.setItem('yokose-migration-done', '1');
+  }
+
+  return { getAll, getById, save, markDeleted, markSynced, markFailed, getPending, getSyncStats, seedFromServer, retryFailed, migrateFromLocalStorage };
+})();
+</script>
+<!-- ================================================================
+  SECTION 4: TrapApi — Supabase layer
+================================================================ -->
+<script>
+const TrapApi = (() => {
+  const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  async function getSession() {
+    const { data } = await client.auth.getSession();
+    return data.session;
+  }
+
+  async function getCurrentUser() {
+    const sess = await getSession();
+    if (!sess) return null;
+    return { id: sess.user.id, email: sess.user.email };
+  }
+
+  async function signInWithGoogle() {
+    const url = window.location.href.split('?')[0].split('#')[0];
+    await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: url } });
+  }
+
+  async function signOut() {
+    await client.auth.signOut();
+  }
+
+  function onAuthStateChange(callback) {
+    const { data: { subscription } } = client.auth.onAuthStateChange(callback);
+    return subscription;
+  }
+
+  async function checkAllowedEmail(email) {
+    const { data } = await client.from('allowed_emails').select('email').eq('email', email).maybeSingle();
+    return !!data;
+  }
+
+  async function fetchAll() {
+    const { data, error } = await client.from('traps')
+      .select('*')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function upsertTrap(local) {
+    const { error } = await client.from('traps').upsert(toServerRecord(local), { onConflict: 'id' });
+    if (error) throw error;
+  }
+
+  async function softDeleteTrap(id, deletedAt, deletedBy) {
+    const { error } = await client.from('traps')
+      .update({ deleted_at: deletedAt, deleted_by: deletedBy, updated_at: deletedAt })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  return { getSession, getCurrentUser, signInWithGoogle, signOut, onAuthStateChange, checkAllowedEmail, fetchAll, upsertTrap, softDeleteTrap };
+})();
+</script>
+
+<!-- ================================================================
+  SECTION 5: SyncService — sync orchestrator
+================================================================ -->
+<script>
+const SyncService = (() => {
+  let _isSyncing  = false;
+  let _pollTimer  = null;
+  let _eventsSet  = false;
+
+  async function syncPending() {
+    const pending = await TrapDB.getPending();
+    let succeeded = 0, failed = 0;
+    const errors = [];
+    const user = await TrapApi.getCurrentUser();
+
+    for (const trap of pending) {
+      try {
+        if (trap.pendingOperation === 'delete') {
+          await TrapApi.softDeleteTrap(trap.id, trap.deletedAt, trap.deletedBy);
+        } else {
+          const rec = { ...trap };
+          if (user) {
+            rec.updatedBy = user.id;
+            if (trap.pendingOperation === 'insert') rec.createdBy = user.id;
+          }
+          await TrapApi.upsertTrap(rec);
+        }
+        await TrapDB.markSynced(trap.id);
+        succeeded++;
+      } catch (e) {
+        await TrapDB.markFailed(trap.id);
+        errors.push({ id: trap.id, error: e.message || String(e) });
+        failed++;
+      }
+    }
+    return { succeeded, failed, errors };
+  }
+
+  async function refreshFromServer() {
+    try {
+      const serverRecords = await TrapApi.fetchAll();
+      await TrapDB.seedFromServer(serverRecords);
+      document.dispatchEvent(new CustomEvent('trap-data-changed'));
+    } catch (e) {
+      console.warn('[SyncService] refreshFromServer failed:', e);
+    }
+  }
+
+  async function fullSync() {
+    if (_isSyncing) return;
+    _isSyncing = true;
+    document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: true } }));
+    try {
+      await syncPending();
+      await refreshFromServer();
+    } finally {
+      _isSyncing = false;
+      document.dispatchEvent(new CustomEvent('sync-state-change', { detail: { syncing: false } }));
+    }
+  }
+
+  async function retryFailed() {
+    await TrapDB.retryFailed();
+    await fullSync();
+  }
+
+  function startPolling(ms) {
+    if (_pollTimer) return;
+    _pollTimer = setInterval(() => { if (navigator.onLine) fullSync(); }, ms || 30000);
+  }
+
+  function stopPolling() {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  }
+
+  function bindBrowserEvents() {
+    if (_eventsSet) return;
+    _eventsSet = true;
+    window.addEventListener('online', () => fullSync());
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) fullSync();
+    });
+  }
+
+  return { syncPending, refreshFromServer, fullSync, retryFailed, startPolling, stopPolling, bindBrowserEvents };
+})();
+
+/* ---- グローバル公開（window._app のみ） ---- */
+window._app = { db: TrapDB, api: TrapApi, sync: SyncService };
+</script>
+<script type="text/babel" data-presets="react">
+const {useState, useEffect, useRef, useCallback} = React;
+
+/* ── Constants ─────────────────────────────────────────────── */
+const TILE_CACHE = 'gsi-v2';
+const CENTER = [35.9722871, 139.165769];
+const ZOOM0 = 15;
 
 /* ── Offline tile cache ────────────────────────────────────── */
 const OFFLINE_SVG = 'data:image/svg+xml,' + encodeURIComponent(
@@ -300,6 +558,73 @@ const makePopup = (t) => {
 
 const labelSt = {display:'block', fontSize:'0.8rem', fontWeight:800, color:'var(--forest-500)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8};
 
+/* ── useSyncState ─────────────────────────────────────────────── */
+function useSyncState() {
+  const [stats, setStats]     = React.useState({pending:0, failed:0});
+  const [syncing, setSyncing] = React.useState(false);
+  const [lastSync, setLastSync] = React.useState(null);
+
+  const refresh = React.useCallback(async () => {
+    const s = await TrapDB.getSyncStats();
+    setStats(s);
+    setLastSync(new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'}));
+  }, []);
+
+  React.useEffect(() => {
+    const onStateChange = (e) => {
+      setSyncing(e.detail.syncing);
+      if (!e.detail.syncing) refresh();
+    };
+    const onDataChange = () => refresh();
+    document.addEventListener('sync-state-change', onStateChange);
+    document.addEventListener('trap-data-changed', onDataChange);
+    refresh();
+    return () => {
+      document.removeEventListener('sync-state-change', onStateChange);
+      document.removeEventListener('trap-data-changed', onDataChange);
+    };
+  }, [refresh]);
+
+  return { pending: stats.pending, failed: stats.failed, syncing, lastSync };
+}
+
+/* ── SyncStatusBanner ─────────────────────────────────────────── */
+function SyncStatusBanner({onRetry}) {
+  const { pending, failed, syncing, lastSync } = useSyncState();
+  const isOffline = !navigator.onLine;
+
+  if (syncing) {
+    return (
+      <div style={{background:'#EFF6FF', color:'#1D4ED8', fontSize:'0.72rem', fontWeight:800, padding:'5px 12px', textAlign:'center', borderBottom:'1px solid #BFDBFE', flexShrink:0}}>
+        ⏳ 同期中...
+      </div>
+    );
+  }
+  if (failed > 0) {
+    return (
+      <div onClick={onRetry} style={{background:'#FEF2F2', color:'#DC2626', fontSize:'0.72rem', fontWeight:800, padding:'5px 12px', textAlign:'center', borderBottom:'1px solid #FECACA', flexShrink:0, cursor:'pointer'}}>
+        ✗ {failed}件 送信失敗 — タップして再試行
+      </div>
+    );
+  }
+  if (pending > 0) {
+    return (
+      <div style={{background:'#FFFBEB', color:'#92400E', fontSize:'0.72rem', fontWeight:800, padding:'5px 12px', textAlign:'center', borderBottom:'1px solid #FDE68A', flexShrink:0}}>
+        ⏳ {pending}件 送信待ち
+      </div>
+    );
+  }
+  if (isOffline) return null;
+  if (lastSync) {
+    return (
+      <div style={{background:'white', color:'#94A3B8', fontSize:'0.68rem', fontWeight:700, padding:'3px 12px', textAlign:'center', borderBottom:'1px solid var(--forest-100)', flexShrink:0}}>
+        最終同期: {lastSync}
+      </div>
+    );
+  }
+  return null;
+}
+
 /* ── FilterBar ─────────────────────────────────────────────── */
 function FilterBar({query, setQuery, filterSt, setFSt, filterTy, setFTy, mobile}) {
   const h = mobile ? '2.875rem' : '2.125rem';
@@ -323,7 +648,7 @@ function FilterBar({query, setQuery, filterSt, setFSt, filterTy, setFTy, mobile}
 }
 
 /* ── TrapCard ──────────────────────────────────────────────── */
-function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDetail, desktop}) {
+function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDetail, desktop, syncStatus}) {
   const tt = TRAP_TYPES[t.type];
   const st = TRAP_STATUS[t.status];
   const lastSight = t.sightings[t.sightings.length-1];
@@ -339,6 +664,8 @@ function TrapCard({trap:t, isOpen, isSel, onToggle, onEdit, onDel, onFly, onDeta
           <div style={{display:'flex', alignItems:'center', gap:7, flexWrap:'wrap', marginBottom:4}}>
             <span style={{fontWeight:900, fontSize:'1rem', color:'var(--forest-900)', fontFamily:"'JetBrains Mono', monospace", letterSpacing:'0.05em'}}>{t.trapId}</span>
             <span className="status-badge" style={{background:st.bg, color:st.text, borderColor:st.border}}>{STATUS_ICON[t.status]} {t.status}</span>
+            {syncStatus === 'pending' && <span style={{fontSize:'0.65rem', color:'#D97706'}} title="同期待ち">⏳</span>}
+            {syncStatus === 'failed'  && <span style={{fontSize:'0.65rem', color:'#DC2626'}} title="同期失敗">✗</span>}
           </div>
           <div style={{fontSize:'0.78rem', color:'var(--forest-600)', fontWeight:600, marginBottom:3}}>
             {tt.label}{t.notes ? ' · ' + t.notes.slice(0,24) : ''}
@@ -399,7 +726,8 @@ function TrapList({filtered, traps, openCardId, setOpenCardId, selId, onEdit, on
           onDel={() => onDel(t.id)}
           onFly={() => onFly(t)}
           onDetail={() => onDetail(t.id)}
-          desktop={desktop}/>
+          desktop={desktop}
+          syncStatus={t.syncStatus}/>
       ))}
     </div>
   );
@@ -773,6 +1101,10 @@ function App({session, onLogout}) {
   const [caching, setCaching]         = useState(false);
   const [locating, setLocating]       = useState(false);
   const [toast, setToast]             = useState('');
+  const showToast = useCallback((msg, ms) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), ms || 3500);
+  }, []);
   const [showCacheModal, setShowCacheModal] = useState(false);
   const [mapType, setMapType] = useState(() => localStorage.getItem('yokose-maptype') || 'gsi');
 
@@ -783,14 +1115,34 @@ function App({session, onLogout}) {
   const locDotRef    = useRef(null);
   const locCircRef   = useRef(null);
   const locFlyDone   = useRef(false);
-  // Load traps from Supabase on mount
+  // IndexedDB-first load + background sync
   useEffect(() => {
-    sbClient.from('traps').select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', {ascending:false})
-      .then(({data, error}) => {
-        if (!error && data) setTraps(data.map(dbToTrap));
-      });
+    let mounted = true;
+    (async () => {
+      // 1. 移行（yokose-v4 → IndexedDB、初回のみ）
+      await TrapDB.migrateFromLocalStorage();
+
+      // 2. IndexedDB から即時表示
+      const local = await TrapDB.getAll();
+      if (mounted) setTraps(local);
+
+      // 3. イベント登録（trap-data-changed でデータを再読み込み）
+      const onDataChange = async () => {
+        const refreshed = await TrapDB.getAll();
+        if (mounted) setTraps(refreshed);
+      };
+      document.addEventListener('trap-data-changed', onDataChange);
+      SyncService.bindBrowserEvents();
+      SyncService.startPolling(30000);
+
+      // 4. オンラインなら Supabase と同期
+      if (navigator.onLine) {
+        await SyncService.fullSync();
+        const synced = await TrapDB.getAll();
+        if (mounted) setTraps(synced);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -908,34 +1260,70 @@ function App({session, onLogout}) {
   const saveTrap = useCallback(async () => {
     if (!draft || !draft.trapId.trim()) return;
     const now = new Date().toISOString();
-    const uid = session.user.id;
+    const user = await TrapApi.getCurrentUser();
+    const isOnline = navigator.onLine;
+
+    let trapToSave;
     if (editTrapId) {
-      const {error} = await sbClient.from('traps').update({
-        trap_id:draft.trapId, type:draft.type, status:draft.status,
-        installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
-        notes:draft.notes||'', updated_at:now
-      }).eq('id', editTrapId).eq('user_id', uid);
-      if (!error) setTraps(p => p.map(t => t.id===editTrapId ? {...t, ...draft, updatedAt:now} : t));
+      const existing = await TrapDB.getById(editTrapId);
+      trapToSave = {
+        ...(existing || {}),
+        ...draft,
+        id:        editTrapId,
+        updatedAt: now,
+        updatedBy: user ? user.id : null,
+      };
     } else {
-      const {data, error} = await sbClient.from('traps').insert({
-        trap_id:draft.trapId, type:draft.type, status:draft.status,
-        installed_at:draft.installedAt||null, lat:draft.lat||null, lng:draft.lng||null,
-        notes:draft.notes||'', sightings:[], user_id:uid, created_at:now, updated_at:now
-      }).select().single();
-      if (!error && data) setTraps(p => [dbToTrap(data), ...p]);
+      trapToSave = {
+        id:          crypto.randomUUID(),
+        trapId:      draft.trapId,
+        type:        draft.type,
+        status:      draft.status,
+        installedAt: draft.installedAt || '',
+        lat:         draft.lat  || '',
+        lng:         draft.lng  || '',
+        notes:       draft.notes || '',
+        sightings:   [],
+        createdAt:   now,
+        updatedAt:   now,
+        createdBy:   user ? user.id : null,
+        updatedBy:   user ? user.id : null,
+        deletedAt:   null,
+        deletedBy:   null,
+      };
     }
+
+    await TrapDB.save(trapToSave);
+    setTraps(await TrapDB.getAll());
     setSF(false); setDraft(null);
-  }, [draft, editTrapId, session]);
+
+    if (isOnline) {
+      await SyncService.fullSync();
+      setTraps(await TrapDB.getAll());
+      showToast(editTrapId ? '更新して同期しました' : '登録して同期しました');
+    } else {
+      showToast(editTrapId ? 'オフラインで更新しました。通信回復後に同期します' : 'オフラインで登録しました。通信回復後に同期します');
+    }
+  }, [draft, editTrapId, showToast]);
 
   const deleteTrap = useCallback(async (id) => {
-    const {error} = await sbClient.from('traps').delete().eq('id', id).eq('user_id', session.user.id);
-    if (!error) {
-      setTraps(p => p.filter(t => t.id!==id));
-      setDelId(null);
-      if (detailId===id) setDetailId(null);
-      if (selId===id) setSelId(null);
+    const user = await TrapApi.getCurrentUser();
+    const isOnline = navigator.onLine;
+
+    await TrapDB.markDeleted(id, user ? user.id : null);
+    setTraps(await TrapDB.getAll());
+    setDelId(null);
+    if (detailId === id) setDetailId(null);
+    if (selId === id) setSelId(null);
+
+    if (isOnline) {
+      await SyncService.fullSync();
+      setTraps(await TrapDB.getAll());
+      showToast('削除して同期しました');
+    } else {
+      showToast('オフラインで削除登録しました。通信回復後に同期します');
     }
-  }, [detailId, selId, session]);
+  }, [detailId, selId, showToast]);
 
   const openNewSighting = useCallback(() => {
     setSDraft({timestamp:new Date().toISOString().slice(0,16), animal:'shika', notes:''});
@@ -944,34 +1332,61 @@ function App({session, onLogout}) {
 
   const saveSighting = useCallback(async () => {
     if (!sDraft || !detailId) return;
-    const sighting = {id:crypto.randomUUID(), ...sDraft};
-    const trap = traps.find(t => t.id===detailId);
+    const trap = await TrapDB.getById(detailId);
     if (!trap) return;
-    const newSightings = [...trap.sightings, sighting];
+    const user = await TrapApi.getCurrentUser();
     const now = new Date().toISOString();
-    const {error} = await sbClient.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', detailId).eq('user_id', session.user.id);
-    if (!error) setTraps(p => p.map(t => t.id===detailId ? {...t, sightings:newSightings, updatedAt:now} : t));
+    await TrapDB.save({
+      ...trap,
+      sightings: [...trap.sightings, { id: crypto.randomUUID(), ...sDraft }],
+      updatedAt: now,
+      updatedBy: user ? user.id : null,
+    });
+    setTraps(await TrapDB.getAll());
     setSSF(false); setSDraft(null);
-  }, [sDraft, detailId, traps, session]);
+    if (navigator.onLine) { await SyncService.fullSync(); setTraps(await TrapDB.getAll()); }
+  }, [sDraft, detailId]);
 
   const deleteSighting = useCallback(async (trapId, sightingId) => {
-    const trap = traps.find(t => t.id===trapId);
+    const trap = await TrapDB.getById(trapId);
     if (!trap) return;
-    const newSightings = trap.sightings.filter(s => s.id!==sightingId);
+    const user = await TrapApi.getCurrentUser();
     const now = new Date().toISOString();
-    const {error} = await sbClient.from('traps').update({sightings:newSightings, updated_at:now}).eq('id', trapId).eq('user_id', session.user.id);
-    if (!error) setTraps(p => p.map(t => t.id===trapId ? {...t, sightings:newSightings, updatedAt:now} : t));
-  }, [traps, session]);
+    await TrapDB.save({
+      ...trap,
+      sightings: trap.sightings.filter(s => s.id !== sightingId),
+      updatedAt: now,
+      updatedBy: user ? user.id : null,
+    });
+    setTraps(await TrapDB.getAll());
+    if (navigator.onLine) { await SyncService.fullSync(); setTraps(await TrapDB.getAll()); }
+  }, []);
 
   const getGPS = useCallback(() => {
-    if (!navigator.geolocation) { setGpsErr('GPSに対応していません'); return; }
+    if (!navigator.geolocation) {
+      setGpsErr('このデバイスはGPSに対応していません');
+      return;
+    }
     setGpsLd(true); setGpsErr('');
     navigator.geolocation.getCurrentPosition(
-      pos => { setDraft(d => d ? {...d, lat:pos.coords.latitude.toFixed(6), lng:pos.coords.longitude.toFixed(6)} : d); setGpsLd(false); },
-      () => { setGpsErr('GPS取得失敗。屋外で再試行してください'); setGpsLd(false); },
+      pos => {
+        setDraft(d => d ? {...d, lat:pos.coords.latitude.toFixed(6), lng:pos.coords.longitude.toFixed(6)} : d);
+        setGpsLd(false);
+      },
+      (err) => {
+        setGpsLd(false);
+        if (err.code === 1) {
+          setGpsErr('位置情報の使用が拒否されています。ブラウザの設定を確認してください');
+        } else if (err.code === 3) {
+          setGpsErr('GPS取得がタイムアウトしました。屋外で再試行してください');
+        } else {
+          setGpsErr('GPS取得に失敗しました。手動で入力してください');
+        }
+        showToast('GPS取得に失敗しました。手動で入力してください', 5000);
+      },
       {enableHighAccuracy:true, timeout:15000}
     );
-  }, []);
+  }, [showToast]);
 
   const startPick = useCallback(() => { setSF(false); setPicking(true); setMobTab('map'); }, []);
   const confirmPick = useCallback(() => {
@@ -1035,6 +1450,7 @@ function App({session, onLogout}) {
   return (
     <div style={{height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:'var(--parchment)'}}>
       {offline && <div className="offline-bar">📡 オフラインモード — キャッシュデータを表示中</div>}
+      <SyncStatusBanner onRetry={() => SyncService.retryFailed().then(async () => setTraps(await TrapDB.getAll()))} />
 
       <header style={{background:'linear-gradient(135deg,var(--forest-900) 0%,var(--forest-700) 100%)', color:'white', padding:'8px 16px 8px', flexShrink:0}}>
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
@@ -1222,9 +1638,9 @@ function Root() {
   useEffect(() => {
     const checkAllowed = async (sess) => {
       if (!sess) { setAuthLoading(false); setAuthSession(null); return; }
-      const {data} = await sbClient.from('allowed_emails').select('email').eq('email', sess.user.email).maybeSingle();
-      if (!data) {
-        await sbClient.auth.signOut();
+      const allowed = await TrapApi.checkAllowedEmail(sess.user.email);
+      if (!allowed) {
+        await TrapApi.signOut();
         setAuthError('このアカウントはアクセスが許可されていません。管理者に連絡してください。');
         setAuthLoading(false);
         setAuthSession(null);
@@ -1235,7 +1651,7 @@ function Root() {
       }
     };
 
-    const {data:{subscription}} = sbClient.auth.onAuthStateChange((event, sess) => {
+    const sub = TrapApi.onAuthStateChange((event, sess) => {
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
         checkAllowed(sess);
       } else if (event === 'SIGNED_OUT') {
@@ -1245,16 +1661,15 @@ function Root() {
         setAuthSession(sess);
       }
     });
-    return () => subscription.unsubscribe();
+    return () => sub.unsubscribe();
   }, []);
 
   const handleLogin = useCallback(async () => {
-    const url = window.location.href.split('?')[0].split('#')[0];
-    await sbClient.auth.signInWithOAuth({provider:'google', options:{redirectTo:url}});
+    await TrapApi.signInWithGoogle();
   }, []);
 
   const handleLogout = useCallback(async () => {
-    await sbClient.auth.signOut();
+    await TrapApi.signOut();
   }, []);
 
   if (authLoading) return React.createElement(LoadingScreen);
