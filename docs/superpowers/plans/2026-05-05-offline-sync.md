@@ -30,27 +30,42 @@
 **対象:** Supabase ダッシュボード → SQL Editor
 URL: `https://supabase.com/dashboard/project/ykojblrieeirgbxxurwh/sql`
 
+**前提:** `created_by`, `updated_by` の追加と共有 RLS への変更はすでに実施済み。
+今回は `deleted_at`, `deleted_by` の追加と RLS 設定の確認のみ行う。
+
 ---
 
-- [ ] **Step 1: 新規カラムを追加する**
+- [ ] **Step 1: 論理削除用カラムを追加する**
 
 ```sql
--- 共有データ用の監査カラムを追加
-ALTER TABLE traps ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES auth.users(id);
-ALTER TABLE traps ADD COLUMN IF NOT EXISTS updated_by uuid REFERENCES auth.users(id);
+-- 論理削除用カラムを追加（IF NOT EXISTS なので再実行しても安全）
 ALTER TABLE traps ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 ALTER TABLE traps ADD COLUMN IF NOT EXISTS deleted_by uuid REFERENCES auth.users(id);
 ```
 
-Expected: 4 件 Success
+Expected: 2 件 Success
 
-- [ ] **Step 2: RLS を個人管理から共有管理に変更する**
+- [ ] **Step 2: 現在の RLS ポリシーを確認する**
 
 ```sql
--- 旧ポリシーを削除
-DROP POLICY IF EXISTS "own traps" ON traps;
+SELECT policyname, cmd, qual
+FROM pg_policies
+WHERE tablename = 'traps';
+```
 
--- 新ポリシー: allowed_emails に登録済みの認証ユーザーは全件アクセス可能
+確認内容:
+- `"own traps"` ポリシーが **存在しない** こと（`auth.uid() = user_id` の個人管理ポリシー）
+- 共有アクセス用ポリシーが SELECT / INSERT / UPDATE に存在すること
+
+- [ ] **Step 3: RLS に不足があれば補完する（Step 2 で確認後に必要なものだけ実行）**
+
+個人管理ポリシーが残っている場合:
+```sql
+DROP POLICY IF EXISTS "own traps" ON traps;
+```
+
+共有ポリシーが不足している場合（存在するものは省略してよい）:
+```sql
 CREATE POLICY "shared traps select" ON traps FOR SELECT
   USING (auth.email() IN (SELECT email FROM allowed_emails));
 
@@ -63,14 +78,14 @@ CREATE POLICY "shared traps update" ON traps FOR UPDATE
 -- DELETE ポリシーは不要（論理削除のため物理削除は管理者のみ）
 ```
 
-Expected: Success
+- [ ] **Step 4: 動作確認**
 
-- [ ] **Step 3: 動作確認**
+Supabase Table Editor で `traps` テーブルを開き、以下を確認:
+- `deleted_at`（timestamptz, nullable）が存在すること
+- `deleted_by`（uuid, nullable）が存在すること
+- `created_by`, `updated_by` が既に存在すること
 
-Supabase Table Editor で `traps` テーブルを開き、以下の 4 カラムが追加されていることを確認:
-`created_by`, `updated_by`, `deleted_at`, `deleted_by`
-
-- [ ] **Step 4: コミット**
+- [ ] **Step 5: コミット**
 
 ```bash
 git add docs/superpowers/plans/2026-05-05-offline-sync.md
@@ -552,7 +567,22 @@ git commit -m "feat: SECTION 4 TrapApi を追加し sbClient を Babel ブロッ
 
 ---
 
-- [ ] **Step 1: SECTION 5 ブロックと `window._app` を SECTION 4 の `</script>` 直後に挿入する**
+- [ ] **Step 1: `fullSync()` の二重起動防止設計を確認する**
+
+`SyncService` 内に `_isSyncing` フラグを持ち、以下のパターンで二重起動を防ぐ:
+```
+fullSync() 呼び出し
+  └─ _isSyncing === true → 即 return（何もしない）
+  └─ _isSyncing === false
+       → _isSyncing = true
+       → syncPending() → refreshFromServer()
+       → finally: _isSyncing = false（成功・失敗どちらでも解放）
+```
+
+polling（30秒）/ window online / visibilitychange / 操作直後 が同時に発火しても
+最初の1回だけが実行され、残りは無視される。
+
+- [ ] **Step 2: SECTION 5 ブロックと `window._app` を SECTION 4 の `</script>` 直後に挿入する**
 
 ```html
 <!-- ================================================================
@@ -683,7 +713,24 @@ const showToast = useCallback((msg, ms) => {
 }, []);
 ```
 
-- [ ] **Step 2: 初期ロードの `useEffect`（現在 `sbClient.from('traps')...` を呼んでいる箇所）を書き換える**
+- [ ] **Step 2: 初回読み込みの順序を確認する**
+
+以下の順序を厳守すること:
+```
+1. TrapDB.migrateFromLocalStorage()
+   ├─ yokose-migration-done フラグあり → スキップ
+   ├─ IndexedDB にデータあり → フラグをセットしてスキップ
+   └─ yokose-v4 が localStorage にあれば → IndexedDB へコピーしてフラグをセット
+
+2. TrapDB.getAll() → setTraps(local)  ← IndexedDB から即時表示
+
+3. SyncService.bindBrowserEvents() / startPolling(30000)  ← イベント登録
+
+4. navigator.onLine の場合のみ:
+   SyncService.fullSync() → setTraps(await TrapDB.getAll())  ← Supabase と同期
+```
+
+- [ ] **Step 3: 初期ロードの `useEffect`（現在 `sbClient.from('traps')...` を呼んでいる箇所）を書き換える**
 
 変更前:
 ```js
@@ -698,25 +745,29 @@ useEffect(() => {
 }, []);
 ```
 
-変更後:
+変更後（上記 Step 2 の順序に従う）:
 ```js
 // IndexedDB-first load + background sync
 useEffect(() => {
   let mounted = true;
   (async () => {
+    // 1. 移行（yokose-v4 → IndexedDB、初回のみ）
     await TrapDB.migrateFromLocalStorage();
+
+    // 2. IndexedDB から即時表示
     const local = await TrapDB.getAll();
     if (mounted) setTraps(local);
 
+    // 3. イベント登録（trap-data-changed でデータを再読み込み）
     const onDataChange = async () => {
       const refreshed = await TrapDB.getAll();
       if (mounted) setTraps(refreshed);
     };
     document.addEventListener('trap-data-changed', onDataChange);
-
     SyncService.bindBrowserEvents();
     SyncService.startPolling(30000);
 
+    // 4. オンラインなら Supabase と同期
     if (navigator.onLine) {
       await SyncService.fullSync();
       const synced = await TrapDB.getAll();
@@ -727,13 +778,13 @@ useEffect(() => {
 }, []);
 ```
 
-- [ ] **Step 3: ブラウザで動作確認**
+- [ ] **Step 4: ブラウザで動作確認**
 
 - ページリロード → 既存の罠一覧が IndexedDB 経由で表示されること
 - DevTools > Application > IndexedDB > yokoze-trap-notes > traps にレコードが入っていること
 - Console: `await TrapDB.getAll()` で一覧と同じレコードが返ること
 
-- [ ] **Step 4: コミット**
+- [ ] **Step 5: コミット**
 
 ```bash
 git add trap-notes.html
