@@ -540,20 +540,58 @@ const makePin = (trap, selected) => {
   });
 };
 
+// セキュリティ注意: trapId / notes / status はユーザー編集・Supabase 共有データのため、
+// 文字列連結＋innerHTML ではなく DOM API（createElement + textContent）で組み立てる。
+// textContent は常にリテラルテキストとして描画され、HTML としてパースされないため
+// <img onerror=...> 等の XSS ペイロードが混入してもスクリプトとして実行されない。
+// Leaflet の bindPopup()/setPopupContent() は String だけでなく HTMLElement も受け付ける。
 const makePopup = (t) => {
   const tt = TRAP_TYPES[t.type];
   const st = TRAP_STATUS[t.status];
   const lastS = t.sightings.length > 0 ? t.sightings[t.sightings.length-1] : null;
   const animal = lastS ? (AMAP[lastS.animal] || AMAP.other) : null;
-  return '<div style="font-family:\'Zen Maru Gothic\',\'Hiragino Sans\',sans-serif;font-size:13px;min-width:180px">' +
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
-    '<span style="font-size:24px;line-height:1">' + tt.emoji + '</span>' +
-    '<div><div style="font-weight:900;color:#0D2614;font-size:15px">' + t.trapId + '</div>' +
-    '<div style="font-size:11px;color:#3A8F56;font-weight:700">' + (t.notes || tt.label) + '</div></div></div>' +
-    '<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;background:' + st.bg + ';color:' + st.text + ';border:1.5px solid ' + st.border + ';font-size:11px;font-weight:800;margin-bottom:7px">' + STATUS_ICON[t.status] + ' ' + t.status + '</div>' +
-    '<div style="font-size:11px;color:#6B8C7A;margin-bottom:4px">🗓 設置日 ' + fmtDate(t.installedAt) + '</div>' +
-    (t.sightings.length > 0 ? '<div style="font-size:11px;color:#6B8C7A">📷 目撃 ' + t.sightings.length + '件' + (animal ? '（最新: ' + animal.emoji + animal.label + '）' : '') + '</div>' : '') +
-    '</div>';
+
+  const root = document.createElement('div');
+  root.style.cssText = "font-family:'Zen Maru Gothic','Hiragino Sans',sans-serif;font-size:13px;min-width:180px";
+
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px';
+
+  const emojiSpan = document.createElement('span');
+  emojiSpan.style.cssText = 'font-size:24px;line-height:1';
+  emojiSpan.textContent = tt.emoji; // 定数テーブル由来（ユーザー入力ではない）
+  header.appendChild(emojiSpan);
+
+  const titleWrap = document.createElement('div');
+  const trapIdDiv = document.createElement('div');
+  trapIdDiv.style.cssText = 'font-weight:900;color:#0D2614;font-size:15px';
+  trapIdDiv.textContent = t.trapId; // ユーザー編集値 → textContent で安全に描画
+  const subDiv = document.createElement('div');
+  subDiv.style.cssText = 'font-size:11px;color:#3A8F56;font-weight:700';
+  subDiv.textContent = t.notes || tt.label; // ユーザー編集値 → textContent で安全に描画
+  titleWrap.appendChild(trapIdDiv);
+  titleWrap.appendChild(subDiv);
+  header.appendChild(titleWrap);
+  root.appendChild(header);
+
+  const statusBadge = document.createElement('div');
+  statusBadge.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;background:' + st.bg + ';color:' + st.text + ';border:1.5px solid ' + st.border + ';font-size:11px;font-weight:800;margin-bottom:7px';
+  statusBadge.textContent = STATUS_ICON[t.status] + ' ' + t.status;
+  root.appendChild(statusBadge);
+
+  const dateDiv = document.createElement('div');
+  dateDiv.style.cssText = 'font-size:11px;color:#6B8C7A;margin-bottom:4px';
+  dateDiv.textContent = '🗓 設置日 ' + fmtDate(t.installedAt); // fmtDate は数値のみを返す
+  root.appendChild(dateDiv);
+
+  if (t.sightings.length > 0) {
+    const sightDiv = document.createElement('div');
+    sightDiv.style.cssText = 'font-size:11px;color:#6B8C7A';
+    sightDiv.textContent = '📷 目撃 ' + t.sightings.length + '件' + (animal ? '（最新: ' + animal.emoji + animal.label + '）' : '');
+    root.appendChild(sightDiv);
+  }
+
+  return root;
 };
 
 const labelSt = {display:'block', fontSize:'0.8rem', fontWeight:800, color:'var(--forest-500)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8};
