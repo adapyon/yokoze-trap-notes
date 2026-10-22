@@ -4,15 +4,15 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>横瀬町 罠猟ノート</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js" integrity="sha384-UagCvVPT5XXA0Hx+nJYUAGBFseHT9zBgpJMSebsAxl9lciTwbT+39j5VfRjdP5Tp" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/dexie@3.2.7/dist/dexie.js" integrity="sha384-reBVfKAU1UxUqmRTQ6ntlvTjjJgZ0CwiFjKeeBjJRJQRZOytUnuR+MpZjm4dQOT+" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.10/babel.min.js" integrity="sha384-DvKInD++yy7A2BLvCHTGeQpbzHFQ/fygXywfI/wco5cjKN4A+mE48ib8UE8FiW0o" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden;overscroll-behavior:none;margin:0}
@@ -540,20 +540,58 @@ const makePin = (trap, selected) => {
   });
 };
 
+// セキュリティ注意: trapId / notes / status はユーザー編集・Supabase 共有データのため、
+// 文字列連結＋innerHTML ではなく DOM API（createElement + textContent）で組み立てる。
+// textContent は常にリテラルテキストとして描画され、HTML としてパースされないため
+// <img onerror=...> 等の XSS ペイロードが混入してもスクリプトとして実行されない。
+// Leaflet の bindPopup()/setPopupContent() は String だけでなく HTMLElement も受け付ける。
 const makePopup = (t) => {
   const tt = TRAP_TYPES[t.type];
   const st = TRAP_STATUS[t.status];
   const lastS = t.sightings.length > 0 ? t.sightings[t.sightings.length-1] : null;
   const animal = lastS ? (AMAP[lastS.animal] || AMAP.other) : null;
-  return '<div style="font-family:\'Zen Maru Gothic\',\'Hiragino Sans\',sans-serif;font-size:13px;min-width:180px">' +
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
-    '<span style="font-size:24px;line-height:1">' + tt.emoji + '</span>' +
-    '<div><div style="font-weight:900;color:#0D2614;font-size:15px">' + t.trapId + '</div>' +
-    '<div style="font-size:11px;color:#3A8F56;font-weight:700">' + (t.notes || tt.label) + '</div></div></div>' +
-    '<div style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;background:' + st.bg + ';color:' + st.text + ';border:1.5px solid ' + st.border + ';font-size:11px;font-weight:800;margin-bottom:7px">' + STATUS_ICON[t.status] + ' ' + t.status + '</div>' +
-    '<div style="font-size:11px;color:#6B8C7A;margin-bottom:4px">🗓 設置日 ' + fmtDate(t.installedAt) + '</div>' +
-    (t.sightings.length > 0 ? '<div style="font-size:11px;color:#6B8C7A">📷 目撃 ' + t.sightings.length + '件' + (animal ? '（最新: ' + animal.emoji + animal.label + '）' : '') + '</div>' : '') +
-    '</div>';
+
+  const root = document.createElement('div');
+  root.style.cssText = "font-family:'Zen Maru Gothic','Hiragino Sans',sans-serif;font-size:13px;min-width:180px";
+
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px';
+
+  const emojiSpan = document.createElement('span');
+  emojiSpan.style.cssText = 'font-size:24px;line-height:1';
+  emojiSpan.textContent = tt.emoji; // 定数テーブル由来（ユーザー入力ではない）
+  header.appendChild(emojiSpan);
+
+  const titleWrap = document.createElement('div');
+  const trapIdDiv = document.createElement('div');
+  trapIdDiv.style.cssText = 'font-weight:900;color:#0D2614;font-size:15px';
+  trapIdDiv.textContent = t.trapId; // ユーザー編集値 → textContent で安全に描画
+  const subDiv = document.createElement('div');
+  subDiv.style.cssText = 'font-size:11px;color:#3A8F56;font-weight:700';
+  subDiv.textContent = t.notes || tt.label; // ユーザー編集値 → textContent で安全に描画
+  titleWrap.appendChild(trapIdDiv);
+  titleWrap.appendChild(subDiv);
+  header.appendChild(titleWrap);
+  root.appendChild(header);
+
+  const statusBadge = document.createElement('div');
+  statusBadge.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;background:' + st.bg + ';color:' + st.text + ';border:1.5px solid ' + st.border + ';font-size:11px;font-weight:800;margin-bottom:7px';
+  statusBadge.textContent = STATUS_ICON[t.status] + ' ' + t.status;
+  root.appendChild(statusBadge);
+
+  const dateDiv = document.createElement('div');
+  dateDiv.style.cssText = 'font-size:11px;color:#6B8C7A;margin-bottom:4px';
+  dateDiv.textContent = '🗓 設置日 ' + fmtDate(t.installedAt); // fmtDate は数値のみを返す
+  root.appendChild(dateDiv);
+
+  if (t.sightings.length > 0) {
+    const sightDiv = document.createElement('div');
+    sightDiv.style.cssText = 'font-size:11px;color:#6B8C7A';
+    sightDiv.textContent = '📷 目撃 ' + t.sightings.length + '件' + (animal ? '（最新: ' + animal.emoji + animal.label + '）' : '');
+    root.appendChild(sightDiv);
+  }
+
+  return root;
 };
 
 const labelSt = {display:'block', fontSize:'0.8rem', fontWeight:800, color:'var(--forest-500)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8};
